@@ -100,6 +100,8 @@ typedef struct {
         ngx_event_handler_pt write_handler;
         void *data;
     } keep;
+    PGconn *conn;
+    PGresult *result;
 } ngx_pq_save_t;
 
 typedef struct ngx_pq_data_t {
