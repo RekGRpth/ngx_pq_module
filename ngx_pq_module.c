@@ -193,6 +193,58 @@ static ngx_http_module_t ngx_pq_ctx = {
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
 
+static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
+    ngx_pq_data_t *d = data;
+    ngx_int_t rc;
+    switch ((rc = d->peer.get(pc, d->peer.data))) {
+        case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
+        case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
+    }
+    ngx_pq_save_t *s = NULL;
+    ngx_http_request_t *r = d->request;
+    ngx_pq_loc_conf_t *plcf = d->plcf;
+    ngx_pq_srv_conf_t *pscf = d->pscf;
+    ngx_pq_connect_t *connect = pscf ? pscf->connects.elts : &plcf->connect;
+    if (pscf) {
+        ngx_uint_t i;
+        for (i = 0; i < pscf->connects.nelts; i++) for (ngx_uint_t j = 0; j < connect[i].url.naddrs; j++) if (!ngx_memn2cmp((u_char *)pc->sockaddr, (u_char *)connect[i].url.addrs[j].sockaddr, pc->socklen, connect[i].url.addrs[j].socklen)) { connect = &connect[i]; goto found; }
+found:
+        if (i == pscf->connects.nelts) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "connect not found"); return NGX_BUSY; }
+    }
+    ngx_http_upstream_t *u = r->upstream;
+    if (pc->connection) {
+        ngx_connection_t *c = pc->connection;
+        for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
+        if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
+        if (!(u->request_bufs = ngx_pq_queries(d, &plcf->queries))) return NGX_ERROR;
+    } else {
+        pc->get = ngx_event_get_peer;
+        switch ((rc = ngx_event_connect_peer(pc))) {
+            case NGX_AGAIN: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_AGAIN"); break;
+            case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
+            case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
+            default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
+        }
+        pc->get = ngx_pq_peer_get;
+        ngx_connection_t *c = pc->connection;
+        if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!c"); return NGX_ERROR; }
+        if (c->pool) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "c->pool"); return NGX_ERROR; }
+        if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); return NGX_ERROR; }
+        if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+        s->connection = c;
+        ngx_pool_cleanup_t *cln;
+        if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); return NGX_ERROR; }
+        cln->data = s;
+        cln->handler = ngx_pq_save_cln_handler;
+        if (!(u->request_bufs = ngx_pq_startup_message(r->pool, &connect->options, 1))) return NGX_ERROR;
+    }
+    s->data = d;
+//    ngx_uint_t i = 0; for (ngx_chain_t *cl = u->request_bufs; cl; cl = cl->next) for (u_char *p = cl->buf->pos; p < cl->buf->last; p++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%ui:%d:%c", i++, *p, *p);
+    return NGX_DONE;
+}
+
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
