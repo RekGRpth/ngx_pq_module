@@ -566,6 +566,30 @@ static char *ngx_pq_pass_loc_server_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *c
     return NGX_CONF_OK;
 }
 
+static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
+    ngx_pq_data_t *d;
+    if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    if (uscf->srv_conf) {
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        if (pscf->peer.init(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer.init != NGX_OK"); return NGX_ERROR; }
+        d->pscf = pscf;
+    } else {
+        if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
+    }
+    ngx_queue_init(&d->queue);
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    d->plcf = plcf;
+    ngx_http_upstream_t *u = r->upstream;
+    d->peer = u->peer;
+    d->request = r;
+    u->conf->upstream = uscf;
+    u->peer.data = d;
+    u->peer.free = ngx_pq_peer_free;
+    u->peer.get = ngx_pq_peer_get;
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *uscf) {
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
