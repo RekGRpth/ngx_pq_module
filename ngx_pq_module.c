@@ -39,6 +39,22 @@ typedef struct {
 } ngx_pq_command_t;
 
 typedef struct {
+    const char *client_encoding;
+    const char **keywords;
+    const char **values;
+    ngx_msec_t timeout;
+    ngx_url_t url;
+    PGVerbosity verbosity;
+} ngx_pq_connect_t;
+
+typedef struct {
+    ngx_array_t queries;
+    ngx_http_complex_value_t complex;
+    ngx_http_upstream_conf_t upstream;
+    ngx_pq_connect_t connect;
+} ngx_pq_loc_conf_t;
+
+typedef struct {
     ngx_flag_t header;
     ngx_flag_t string;
     ngx_int_t index;
@@ -65,27 +81,41 @@ typedef struct {
 } ngx_pq_query_t;
 
 typedef struct {
-    const char *client_encoding;
-    const char **keywords;
-    const char **values;
-    ngx_msec_t timeout;
-    ngx_url_t url;
-    PGVerbosity verbosity;
-} ngx_pq_connect_t;
-
-typedef struct {
-    ngx_array_t queries;
-    ngx_http_complex_value_t complex;
-    ngx_http_upstream_conf_t upstream;
-    ngx_pq_connect_t connect;
-} ngx_pq_loc_conf_t;
-
-typedef struct {
     ngx_array_t connects;
     ngx_array_t queries;
     ngx_http_upstream_peer_t peer;
     ngx_log_t *log;
 } ngx_pq_srv_conf_t;
+
+typedef struct ngx_pq_data_t ngx_pq_data_t;
+typedef struct {
+    ngx_array_t channels;
+    ngx_array_t variables;
+    ngx_buf_t buffer;
+    ngx_connection_t *connection;
+    ngx_msec_t timeout;
+    ngx_pq_data_t *data;
+    ngx_uint_t rc;
+    struct {
+        ngx_event_handler_pt read_handler;
+        ngx_event_handler_pt write_handler;
+        void *data;
+    } keep;
+} ngx_pq_save_t;
+
+typedef struct ngx_pq_data_t {
+    ngx_buf_t *shadow;
+    ngx_http_request_t *request;
+    ngx_peer_connection_t peer;
+    ngx_pq_loc_conf_t *plcf;
+    ngx_pq_query_t *query;
+    ngx_pq_save_t *save;
+    ngx_pq_srv_conf_t *pscf;
+    ngx_queue_t queue;
+    ngx_uint_t col;
+    ngx_uint_t filter;
+    ngx_uint_t row;
+} ngx_pq_data_t;
 
 typedef struct {
     ngx_int_t index;
