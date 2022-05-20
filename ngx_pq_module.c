@@ -566,6 +566,34 @@ static char *ngx_pq_pass_loc_server_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *c
     return NGX_CONF_OK;
 }
 
+static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
+    ngx_pq_data_t *d = data;
+    d->peer.free(pc, d->peer.data, state);
+    ngx_pq_save_t *s = d->save;
+    d->save = NULL;
+    if (!s) return;
+    s->data = NULL;
+    ngx_pq_srv_conf_t *pscf = d->pscf;
+    if (!ngx_queue_empty(&d->queue)) {
+    }
+    if (pc->connection) return;
+    if (!pscf) return;
+    ngx_connection_t *c = s->connection;
+    if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
+    s->keep.data = c->data;
+    s->keep.read_handler = c->read->handler;
+    s->keep.write_handler = c->write->handler;
+    c->data = s;
+    c->read->handler = ngx_pq_read_handler;
+    c->write->handler = ngx_pq_write_handler;
+    if (!pscf->log) return;
+    c->log = pscf->log;
+    c->pool->log = c->log;
+    c->read->log = c->log;
+    c->write->log = c->log;
+}
+
 static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
     ngx_pq_data_t *d;
