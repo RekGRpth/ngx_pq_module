@@ -23,6 +23,11 @@ typedef enum {
 } ngx_pq_output_type_t;
 
 typedef struct {
+    ngx_int_t index;
+    ngx_str_t str;
+} ngx_pq_command_t;
+
+typedef struct {
     ngx_flag_t header;
     ngx_flag_t string;
     ngx_int_t index;
@@ -385,6 +390,61 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
     uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
     return NGX_CONF_OK;
+}
+
+static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
+    ngx_pq_query_t *query;
+    if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
+    ngx_memzero(query, sizeof(*query));
+    ngx_pq_command_t *command;
+    if (ngx_array_init(&query->commands, cf->pool, 1, sizeof(*command)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    ngx_str_t *str = cf->args->elts;
+    ngx_uint_t i = 1;
+    query->type = cmd->offset;
+    if (cmd->offset & ngx_pq_type_prepare) {
+        if (str[i].data[0] == '$') {
+            str[i].data++;
+            str[i].len--;
+            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+        } else query->name.str = str[i];
+        i++;
+    }
+    u_char *b = str[i].data;
+    u_char *e = str[i].data + str[i].len;
+    u_char *n = b;
+    u_char *s = n;
+    while (s < e) {
+        if (*s++ == '$') {
+            if ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_') {
+                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+                ngx_memzero(command, sizeof(*command));
+                command->str.data = n;
+                command->str.len = s - n - 1;
+                n = s;
+                while (s < e && ((*s >= '0' && *s <= '9') || (*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_')) s++;
+                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+                ngx_memzero(command, sizeof(*command));
+                command->str.data = n;
+                command->str.len = s - n;
+                n = s;
+                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            } else {
+                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+                ngx_memzero(command, sizeof(*command));
+                command->str.data = n;
+                command->str.len = s - n;
+                n = s;
+            }
+        }
+    }
+    if (n < s) {
+        if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+        ngx_memzero(command, sizeof(*command));
+        command->str.data = n;
+        command->str.len = s - n;
+    }
+    return ngx_pq_argument_output_loc_conf(cf, cmd, query);
 }
 
 static char *ngx_pq_prepare_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
