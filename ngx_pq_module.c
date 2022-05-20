@@ -387,6 +387,26 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     return NGX_CONF_OK;
 }
 
+static char *ngx_pq_prepare_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &plcf->queries);
+}
+
+static char *ngx_pq_prepare_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
+}
+
+static char *ngx_pq_query_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &plcf->queries);
+}
+
+static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
+}
+
 static char *ngx_pq_server_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
