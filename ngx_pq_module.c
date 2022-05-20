@@ -1,6 +1,8 @@
 #include <ngx_http.h>
 #include <libpq-fe.h>
 
+#define DEF_PGPORT 5432
+
 ngx_module_t ngx_pq_module;
 
 enum {
@@ -18,6 +20,7 @@ typedef struct {
     const char **keywords;
     const char **values;
     ngx_msec_t timeout;
+    ngx_url_t url;
     PGVerbosity verbosity;
 } ngx_pq_connect_t;
 
@@ -36,10 +39,10 @@ typedef struct {
 } ngx_pq_main_conf_t;
 
 typedef struct {
+    ngx_array_t connects;
     ngx_array_t queries;
     ngx_http_upstream_peer_t peer;
     ngx_log_t *log;
-    ngx_pq_connect_t connect;
 } ngx_pq_srv_conf_t;
 
 static void *ngx_pq_create_main_conf(ngx_conf_t *cf) {
@@ -164,6 +167,231 @@ static ngx_http_module_t ngx_pq_ctx = {
     .create_loc_conf = ngx_pq_create_loc_conf,
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
+
+static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_log_set_log(cf, &pscf->log);
+}
+
+static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect, ngx_http_upstream_server_t *us) {
+    ngx_str_t *args = cf->args->elts;
+    ngx_str_t conninfo = ngx_null_string;
+    static const ngx_conf_enum_t e[] = {
+        { ngx_string("default"), PQERRORS_DEFAULT },
+        { ngx_string("sqlstate"), PQERRORS_SQLSTATE },
+        { ngx_string("terse"), PQERRORS_TERSE },
+        { ngx_string("verbose"), PQERRORS_VERBOSE },
+        { ngx_null_string, 0 }
+    };
+    connect->verbosity = PQERRORS_DEFAULT;
+    for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
+        if (us) {
+            if (args[i].len > sizeof("weight=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"weight=", sizeof("weight=") - 1)) {
+                ngx_str_t str = {
+                    .len = args[i].len - (sizeof("weight=") - 1),
+                    .data = &args[i].data[sizeof("weight=") - 1],
+                };
+                ngx_int_t n = ngx_atoi(str.data, str.len);
+                if (n == NGX_ERROR) return "\"weight\" value must be number";
+                if (n <= 0) return "\"weight\" value must be positive";
+                us->weight = (ngx_uint_t)n;
+                continue;
+            }
+            if (args[i].len > sizeof("max_conns=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"max_conns=", sizeof("max_conns=") - 1)) {
+                ngx_str_t str = {
+                    .len = args[i].len - (sizeof("max_conns=") - 1),
+                    .data = &args[i].data[sizeof("max_conns=") - 1],
+                };
+                ngx_int_t n = ngx_atoi(str.data, str.len);
+                if (n == NGX_ERROR) return "\"max_conns\" value must be number";
+                us->max_conns = (ngx_uint_t)n;
+                continue;
+            }
+            if (args[i].len > sizeof("max_fails=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"max_fails=", sizeof("max_fails=") - 1)) {
+                ngx_str_t str = {
+                    .len = args[i].len - (sizeof("max_fails=") - 1),
+                    .data = &args[i].data[sizeof("max_fails=") - 1],
+                };
+                ngx_int_t n = ngx_atoi(str.data, str.len);
+                if (n == NGX_ERROR) return "\"max_fails\" value must be number";
+                us->max_fails = (ngx_uint_t)n;
+                continue;
+            }
+            if (args[i].len > sizeof("fail_timeout=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"fail_timeout=", sizeof("fail_timeout=") - 1)) {
+                ngx_str_t str = {
+                    .len = args[i].len - (sizeof("fail_timeout=") - 1),
+                    .data = &args[i].data[sizeof("fail_timeout=") - 1],
+                };
+                ngx_int_t n = ngx_parse_time(&str, 1);
+                if (n == NGX_ERROR) return "\"fail_timeout\" value must be time";
+                us->fail_timeout = (time_t)n;
+                continue;
+            }
+            if (args[i].len == sizeof("backup") - 1 && !ngx_strncmp(args[i].data, (u_char *)"backup", sizeof("backup") - 1)) {
+                us->backup = 1;
+                continue;
+            }
+            if (args[i].len == sizeof("down") - 1 && !ngx_strncmp(args[i].data, (u_char *)"down", sizeof("down") - 1)) {
+                us->down = 1;
+                continue;
+            }
+        }
+        if (args[i].len > sizeof("error_verbosity=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"error_verbosity=", sizeof("error_verbosity=") - 1)) {
+            ngx_str_t str = {
+                .len = args[i].len - (sizeof("error_verbosity=") - 1),
+                .data = &args[i].data[sizeof("error_verbosity=") - 1],
+            };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str.len && !ngx_strncmp(e[j].name.data, str.data, str.len)) break;
+            if (!e[j].name.len) return "\"error_verbosity\" value must be \"default\", \"sqlstate\", \"terse\" or \"verbose\"";
+            connect->verbosity = e[j].value;
+            continue;
+        }
+        if (i > 1) conninfo.len++;
+        conninfo.len += args[i].len;
+    }
+    if (!(conninfo.data = ngx_pnalloc(cf->pool, conninfo.len + 1))) return "!ngx_pnalloc";
+    u_char *p = conninfo.data;
+    for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
+        if (us) {
+            if (args[i].len > sizeof("weight=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"weight=", sizeof("weight=") - 1)) continue;
+            if (args[i].len > sizeof("max_conns=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"max_conns=", sizeof("max_conns=") - 1)) continue;
+            if (args[i].len > sizeof("max_fails=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"max_fails=", sizeof("max_fails=") - 1)) continue;
+            if (args[i].len > sizeof("fail_timeout=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"fail_timeout=", sizeof("fail_timeout=") - 1)) continue;
+            if (args[i].len == sizeof("backup") - 1 && !ngx_strncmp(args[i].data, (u_char *)"backup", sizeof("backup") - 1)) continue;
+            if (args[i].len == sizeof("down") - 1 && !ngx_strncmp(args[i].data, (u_char *)"down", sizeof("down") - 1)) continue;
+        }
+        if (args[i].len > sizeof("error_verbosity=") - 1 && !ngx_strncmp(args[i].data, (u_char *)"error_verbosity=", sizeof("error_verbosity=") - 1)) continue;
+        if (i > 1) *p++ = ' ';
+        p = ngx_copy(p, args[i].data, args[i].len);
+    }
+    *p = '\0';
+    char *err;
+    PQconninfoOption *opts = PQconninfoParse((const char *)conninfo.data, &err);
+    if (!opts) {
+        size_t len;
+        if (err && (len = ngx_strlen(err))) {
+            err[len - 1] = '\0';
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "%s", err);
+            PQfreemem(err);
+            return NGX_CONF_ERROR;
+        }
+        return "!PQconninfoParse";
+    }
+    u_char *connect_timeout = NULL;
+    u_char *hostaddr = NULL;
+    u_char *host = NULL;
+    u_char *port = NULL;
+    int arg = 0; // hostaddr or host
+    arg++; // connect_timeout
+    arg++; // fallback_application_name
+    for (PQconninfoOption *opt = opts; opt->keyword; opt++) {
+        if (!opt->val) continue;
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"connect_timeout")) { connect_timeout = (u_char *)opt->val; continue; }
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"fallback_application_name")) continue; // !!! discard any fallback_application_name !!!
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"hostaddr")) { hostaddr = (u_char *)opt->val; continue; }
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"host")) { host = (u_char *)opt->val; continue; }
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"port")) port = (u_char *)opt->val; // !!! not continue !!!
+        arg++;
+    }
+    arg++; // last
+    if (!connect_timeout) connect->timeout = 60000; else {
+        ngx_int_t n = ngx_parse_time(&(ngx_str_t){ngx_strlen(connect_timeout), connect_timeout}, 0);
+        if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "ngx_parse_time == NGX_ERROR"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        connect->timeout = (ngx_msec_t)n;
+    }
+    if (hostaddr) {
+        connect->url.url.len = ngx_strlen(hostaddr);
+        if (!(connect->url.url.data = ngx_pnalloc(cf->pool, connect->url.url.len + 1))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        (void)ngx_cpystrn(connect->url.url.data, hostaddr, connect->url.url.len + 1);
+    } else if (host) {
+        connect->url.url.len = ngx_strlen(host);
+        if (!(connect->url.url.data = ngx_pnalloc(cf->pool, connect->url.url.len + 1))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        (void)ngx_cpystrn(connect->url.url.data, host, connect->url.url.len + 1);
+    } else {
+        ngx_str_set(&connect->url.url, "unix:///run/postgresql");
+        host = connect->url.url.data;
+    }
+    if (!port) connect->url.default_port = DEF_PGPORT; else {
+        ngx_int_t n = ngx_atoi(port, ngx_strlen(port));
+        if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "ngx_atoi == NGX_ERROR"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        connect->url.default_port = (in_port_t)n;
+    }
+    if (ngx_parse_url(cf->pool, &connect->url) != NGX_OK) {
+        if (connect->url.err) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "ngx_parse_url(%V:%i) != NGX_OK and %s", &connect->url.url, connect->url.default_port, connect->url.err); }
+        else { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "ngx_parse_url(%V:%i) != NGX_OK", &connect->url.url, connect->url.default_port); }
+        PQconninfoFree(opts);
+        return NGX_CONF_ERROR;
+    }
+    if (us) {
+        us->addrs = connect->url.addrs;
+        us->naddrs = connect->url.naddrs;
+        us->name = connect->url.url;
+    }
+    if (host && connect->url.family != AF_UNIX) arg++; // host
+    arg++;
+    if (!(connect->keywords = ngx_pnalloc(cf->pool, arg * sizeof(const char *)))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+    if (!(connect->values = ngx_pnalloc(cf->pool, arg * sizeof(const char *)))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+    arg = 0; // hostaddr or host
+    connect->keywords[arg] = connect->url.family == AF_UNIX ? "host" : "hostaddr";
+    connect->values[arg] = (const char *)(connect->url.family == AF_UNIX ? host : hostaddr);
+    arg++; // connect_timeout
+    connect->keywords[arg] = "connect_timeout";
+    if (!connect_timeout) connect->values[arg] = "60"; else {
+        size_t val_len = ngx_strlen(connect_timeout);
+        if (!(connect->values[arg] = ngx_pnalloc(cf->pool, val_len + 1))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        (void)ngx_cpystrn((u_char *)connect->values[arg], (u_char *)connect_timeout, val_len + 1);
+    }
+    arg++; // fallback_application_name
+    connect->keywords[arg] = "fallback_application_name";
+    connect->values[arg] = "nginx";
+    for (PQconninfoOption *opt = opts; opt->keyword; opt++) {
+        if (!opt->val) continue;
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"connect_timeout")) continue;
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"fallback_application_name")) continue;
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"hostaddr")) continue;
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"host") && connect->url.family == AF_UNIX) continue;
+        arg++;
+        size_t keyword_len = ngx_strlen(opt->keyword);
+        if (!(connect->keywords[arg] = ngx_pnalloc(cf->pool, keyword_len + 1))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        (void)ngx_cpystrn((u_char *)connect->keywords[arg], (u_char *)opt->keyword, keyword_len + 1);
+        size_t val_len = ngx_strlen(opt->val);
+        if (!(connect->values[arg] = ngx_pnalloc(cf->pool, val_len + 1))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_pnalloc"); PQconninfoFree(opts); return NGX_CONF_ERROR; }
+        (void)ngx_cpystrn((u_char *)connect->values[arg], (u_char *)opt->val, val_len + 1);
+        if (!ngx_strcasecmp((u_char *)opt->keyword, (u_char *)"client_encoding")) connect->client_encoding = connect->values[arg];
+    }
+    arg++; // last
+    connect->keywords[arg] = NULL;
+    connect->values[arg] = NULL;
+    PQconninfoFree(opts);
+    ngx_pfree(cf->pool, conninfo.data);
+    return NGX_CONF_OK;
+}
+
+static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    return ngx_pq_option_loc_ups_conf(cf, &plcf->connect, NULL);
+}
+
+static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
+    if (uscf->peer.init_upstream != ngx_pq_peer_init_upstream) {
+        pscf->peer.init_upstream = uscf->peer.init_upstream ? uscf->peer.init_upstream : ngx_http_upstream_init_round_robin;
+        uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
+    }
+    ngx_pq_connect_t *connect;
+    if (!pscf->connects.nelts && ngx_array_init(&pscf->connects, cf->pool, 1, sizeof(*connect)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (!(connect = ngx_array_push(&pscf->connects))) return "!ngx_array_push";
+    ngx_memzero(connect, sizeof(*connect));
+    ngx_http_upstream_server_t *us;
+    if (!(us = ngx_array_push(uscf->servers))) return "!ngx_array_push";
+    ngx_memzero(us, sizeof(*us));
+    us->fail_timeout = 10;
+    us->max_fails = 1;
+    us->weight = 1;
+    return ngx_pq_option_loc_ups_conf(cf, connect, us);
+}
 
 #if (NGX_HTTP_CACHE)
 static char *ngx_pq_cache(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
