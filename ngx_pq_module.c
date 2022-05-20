@@ -41,12 +41,18 @@ static void *ngx_pq_create_main_conf(ngx_conf_t *cf) {
     return conf;
 }
 
+static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
+    ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
+    if (!conf) return NULL;
+    return conf;
+}
+
 static ngx_http_module_t ngx_pq_ctx = {
     .preconfiguration = NULL,
     .postconfiguration = NULL,
     .create_main_conf = ngx_pq_create_main_conf,
     .init_main_conf = NULL,
-    .create_srv_conf = NULL,
+    .create_srv_conf = ngx_pq_create_srv_conf,
     .merge_srv_conf = NULL,
     .create_loc_conf = NULL,
     .merge_loc_conf = NULL
