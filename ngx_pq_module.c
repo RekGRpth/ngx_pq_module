@@ -15,6 +15,39 @@ enum {
     ngx_pq_type_upstream = 1 << 6,
 };
 
+typedef enum {
+    ngx_pq_output_type_csv = 2,
+    ngx_pq_output_type_none = 0,
+    ngx_pq_output_type_plain = 3,
+    ngx_pq_output_type_value = 1,
+} ngx_pq_output_type_t;
+
+typedef struct {
+    ngx_flag_t header;
+    ngx_flag_t string;
+    ngx_int_t index;
+    ngx_pq_output_type_t type;
+    ngx_str_t null;
+    u_char delimiter;
+    u_char escape;
+    u_char quote;
+} ngx_pq_output_t;
+
+typedef struct {
+    ngx_array_t arguments;
+    ngx_array_t commands;
+    ngx_pq_output_t output;
+    ngx_uint_t type;
+    struct {
+        ngx_int_t index;
+        uint32_t oid;
+    } function;
+    struct {
+        ngx_int_t index;
+        ngx_str_t str;
+    } name;
+} ngx_pq_query_t;
+
 typedef struct {
     const char *client_encoding;
     const char **keywords;
@@ -109,6 +142,31 @@ static ngx_http_module_t ngx_pq_ctx = {
     .create_loc_conf = ngx_pq_create_loc_conf,
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
+
+static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
+    ngx_pq_query_t *query;
+    if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
+    ngx_memzero(query, sizeof(*query));
+    ngx_str_t *str = cf->args->elts;
+    if (str[1].data[0] == '$') {
+        str[1].data++;
+        str[1].len--;
+        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+    } else query->name.str = str[1];
+    query->type = cmd->offset;
+    return ngx_pq_argument_output_loc_conf(cf, cmd, query);
+}
+
+static char *ngx_pq_execute_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    return ngx_pq_execute_loc_ups_conf(cf, cmd, &plcf->queries);
+}
+
+static char *ngx_pq_execute_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_pq_execute_loc_ups_conf(cf, cmd, &pscf->queries);
+}
 
 static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
