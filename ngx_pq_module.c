@@ -91,7 +91,6 @@ typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     ngx_array_t channels;
     ngx_array_t variables;
-    ngx_buf_t buffer;
     ngx_connection_t *connection;
     ngx_msec_t timeout;
     ngx_pq_data_t *data;
@@ -104,7 +103,6 @@ typedef struct {
 } ngx_pq_save_t;
 
 typedef struct ngx_pq_data_t {
-    ngx_buf_t *shadow;
     ngx_http_request_t *request;
     ngx_peer_connection_t peer;
     ngx_pq_loc_conf_t *plcf;
@@ -113,7 +111,6 @@ typedef struct ngx_pq_data_t {
     ngx_pq_srv_conf_t *pscf;
     ngx_queue_t queue;
     ngx_uint_t col;
-    ngx_uint_t filter;
     ngx_uint_t row;
 } ngx_pq_data_t;
 
