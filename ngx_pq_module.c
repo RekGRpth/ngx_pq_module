@@ -623,9 +623,6 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     u->input_filter_ctx = r;
     u->input_filter_init = ngx_pq_input_filter_init;
     u->input_filter = ngx_pq_input_filter;
-    if (!(u->pipe = ngx_pcalloc(r->pool, sizeof(*u->pipe)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    u->pipe->input_ctx = r;
-    u->pipe->input_filter = ngx_pq_pipe_input_filter;
     if (!u->conf->request_buffering && u->conf->pass_request_body && !r->headers_in.chunked) r->request_body_no_buffering = 1;
     if ((rc = ngx_http_read_client_request_body(r, ngx_http_upstream_init)) >= NGX_HTTP_SPECIAL_RESPONSE) return rc;
     return NGX_DONE;
