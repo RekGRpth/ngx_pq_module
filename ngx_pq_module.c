@@ -87,6 +87,11 @@ typedef struct {
     ngx_log_t *log;
 } ngx_pq_srv_conf_t;
 
+typedef struct {
+    ngx_int_t index;
+    ngx_str_t value;
+} ngx_pq_variable_t;
+
 static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
     ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
@@ -158,6 +163,28 @@ static ngx_http_module_t ngx_pq_ctx = {
     .create_loc_conf = ngx_pq_create_loc_conf,
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
+
+static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return NGX_OK;
+    ngx_int_t index = data;
+    ngx_pq_variable_t *variable = s->variables.elts;
+    for (ngx_uint_t i = 0; i < s->variables.nelts; i++) if (variable[i].index == index) {
+        v->data = variable[i].value.data;
+        v->len = variable[i].value.len;
+        v->no_cacheable = 0;
+        v->not_found = 0;
+        v->valid = 1;
+        return NGX_OK;
+    }
+    return NGX_OK;
+}
 
 static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_pq_query_t *query) {
     ngx_str_t *str = cf->args->elts;
