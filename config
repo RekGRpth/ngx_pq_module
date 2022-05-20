@@ -1,0 +1,16 @@
+ngx_addon_name=ngx_pq_module
+
+NGX_PQ_SRCS=$ngx_addon_dir/ngx_pq_module.c
+
+if test -n "$ngx_module_link"; then
+    ngx_module_libs=-lpq
+    ngx_module_name=$ngx_addon_name
+    ngx_module_srcs=$NGX_PQ_SRCS
+    ngx_module_type=HTTP
+
+    . auto/module
+else
+    CORE_LIBS="$CORE_LIBS -lpq"
+    HTTP_MODULES="$HTTP_MODULES $ngx_addon_name"
+    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $NGX_PQ_SRCS"
+fi
