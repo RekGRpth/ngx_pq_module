@@ -585,13 +585,20 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     clcf->handler = ngx_pq_handler;
     if (clcf->name.data[clcf->name.len - 1] == '/') clcf->auto_redirect = 1;
     ngx_str_t *str = cf->args->elts;
-    if (ngx_http_script_variables_count(&str[1])) {
-        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &plcf->complex, 0, 0, 0};
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
-        return NGX_CONF_OK;
+    ngx_url_t url = {0};
+    if (cf->args->nelts == 2) {
+        if (ngx_http_script_variables_count(&str[1])) {
+            ngx_http_compile_complex_value_t ccv = {cf, &str[1], &plcf->complex, 0, 0, 0};
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
+            return NGX_CONF_OK;
+        }
+        url.no_resolve = 1;
+        url.url = str[1];
+    } else {
+        if (ngx_pq_pass_loc_server_ups_conf(cf, &plcf->connect, NULL) == NGX_CONF_ERROR) return NGX_CONF_ERROR;
+        url = plcf->connect.url;
     }
-    if (ngx_pq_pass_loc_server_ups_conf(cf, &plcf->connect, NULL) == NGX_CONF_ERROR) return NGX_CONF_ERROR;
-    if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &plcf->connect.url, 0))) return NGX_CONF_ERROR;
+    if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
     ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
     uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
     return NGX_CONF_OK;
