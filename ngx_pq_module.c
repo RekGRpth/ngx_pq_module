@@ -348,7 +348,10 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
         }
         if (!(query->type & ngx_pq_type_location)) return rc;
     }
-    if (ngx_queue_empty(&d->queue)) {
+    if (d && ngx_queue_empty(&d->queue)) {
+        ngx_http_request_t *r = d->request;
+        ngx_http_upstream_t *u = r->upstream;
+        if (u->cleanup) (*u->cleanup)(r);
     }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
