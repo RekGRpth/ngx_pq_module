@@ -243,26 +243,75 @@ static char *PQerrorMessageMy(const PGconn *conn) {
     return err;
 }
 
-/*static char *PQresultErrorMessageMy(const PGresult *res) {
+static char *PQresultErrorMessageMy(const PGresult *res) {
     char *err = PQresultErrorMessage(res);
     if (!err) return err;
     int len = strlen(err);
     if (!len) return err;
     if (err[len - 1] == '\n') err[len - 1] = '\0';
     return err;
-}*/
+}
 
-static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
-    ngx_connection_t *c = s->connection;
-    ngx_pq_data_t *d = c->data;
+static ngx_buf_t *ngx_pq_buffer(ngx_http_request_t *r, size_t size) {
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_chain_t *cl, **ll;
+    for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
+    if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NULL; }
+    *ll = cl;
+    cl->buf->flush = 1;
+    cl->buf->memory = 1;
+    ngx_buf_t *b = cl->buf;
+    if (b->start) ngx_pfree(r->pool, b->start);
+    if (!(b->start = ngx_palloc(r->pool, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NULL; }
+    b->pos = b->start;
+    b->last = b->start;
+    b->end = b->last + size;
+    b->temporary = 1;
+    b->tag = u->output.tag;
+    return b;
+}
+
+static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+//    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+//    r->headers_out.content_type = core->default_type;
+//    r->headers_out.content_type_len = core->default_type.len;
+    ngx_pq_save_t *s = d->save;
+//    if (PQntuples(s->res) != 1 || PQnfields(s->res) != 1) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received %i value(s) instead of expected single value in location \"%V\"", PQntuples(s->res) * PQnfields(s->res), &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+//    if (PQgetisnull(s->res, 0, 0)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received NULL value in location \"%V\"", &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    size_t size = PQgetlength(s->result, 0, 0);
+//    if (!size) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received empty value in location \"%V\"", &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    ngx_buf_t *b = ngx_pq_buffer(r, size);
+    if (!b) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
+    b->last = ngx_copy(b->last, PQgetvalue(s->result, 0, 0), size);
+    if (b->last != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
+    return NGX_OK;
+}
+
+static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
+//    ngx_connection_t *c = s->connection;
+    ngx_pq_data_t *d = s->data;
+//    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
 //    ngx_pq_loc_conf_t *plc = ngx_http_get_module_loc_conf(r, ngx_pq_module);
 //    ngx_pq_query_t *queryelts = plc->query.elts;
-//    ngx_int_t rc = NGX_OK;
-//    const char *value;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->result)));
-//    if (s->result) switch (PQresultStatus(s->result)) {
+    ngx_int_t rc = NGX_OK;
+    const char *value;
+//    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->result)));
+//    if (s->result) 
+    switch (PQresultStatus(s->result)) {
+        case PGRES_TUPLES_OK: {
+            if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->result)), value); }
+            else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->result))); }
+            if (rc == NGX_OK) rc = ngx_pq_output_value_handler(d);
+        } break;
+        case PGRES_FATAL_ERROR: {
+            if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->result)), value); }
+            else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); }
+        } break;
+        default: break;
+            // fall through
 //        case PGRES_COMMAND_OK: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
         /*case PGRES_FATAL_ERROR: return ngx_pq_error(d);
         case PGRES_COMMAND_OK:
@@ -281,7 +330,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
             if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
             else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
             return rc;*/
-//    }
+    }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
     s->read_handler = NULL;
@@ -296,7 +345,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     ngx_memzero(query, sizeof(*query));
     ngx_str_set(&query->sql, "COMMIT");
     d->query++;*/
-    return NGX_OK;
+    return rc;
 }
 
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
