@@ -108,10 +108,13 @@ typedef struct {
 } ngx_pq_srv_conf_t;
 
 typedef struct ngx_pq_data_t ngx_pq_data_t;
-typedef struct {
+typedef struct ngx_pq_save_t ngx_pq_save_t;
+typedef struct ngx_pq_save_t {
     ngx_array_t channels;
     ngx_array_t variables;
     ngx_connection_t *connection;
+    ngx_int_t (*read_handler) (ngx_pq_save_t *s);
+    ngx_int_t (*write_handler) (ngx_pq_save_t *s);
     ngx_msec_t timeout;
     ngx_pq_data_t *data;
     ngx_uint_t rc;
