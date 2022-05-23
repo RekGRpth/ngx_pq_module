@@ -269,6 +269,18 @@ static ngx_buf_t *ngx_pq_buffer(ngx_http_request_t *r, size_t size) {
     return b;
 }
 
+static ngx_int_t ngx_pq_output_csv_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return NGX_OK;
+}
+
+static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
