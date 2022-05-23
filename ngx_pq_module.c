@@ -319,7 +319,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
             case PGRES_TUPLES_OK: {
                 if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->result)), value); }
                 else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->result))); }
-                if (rc == NGX_OK) rc = ngx_pq_output_value_handler(d);
+                if (rc == NGX_OK && query->output.handler) rc = query->output.handler(d);
             } break;
             case PGRES_FATAL_ERROR: {
                 if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->result)), value); }
