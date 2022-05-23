@@ -318,6 +318,30 @@ static void ngx_pq_save_cln_handler(void *data) {
     PQfinish(s->conn);
 }
 
+static ngx_int_t ngx_pq_connect_handler(ngx_pq_save_t *s) {
+    ngx_connection_t *c = s->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
+    switch (PQstatus(s->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); return NGX_ERROR;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQstatus == CONNECTION_OK"); goto connected;
+        default: break;
+    }
+    switch (PQconnectPoll(s->conn)) {
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); break;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); c->read->active = 0; c->write->active = 1; break;
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
+    }
+    return NGX_AGAIN;
+connected:
+    if (c->read->timer_set) ngx_del_timer(c->read);
+    if (c->write->timer_set) ngx_del_timer(c->write);
+    ngx_pq_data_t *d = s->data;
+    ngx_pq_loc_conf_t *plcf = d->plcf;
+    return ngx_pq_queries(d, &plcf->queries);
+}
+
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
@@ -488,17 +512,10 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
             }
             if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
-            if (cmd->offset & ngx_pq_type_function) {
-                static const ngx_conf_enum_t e[] = { { ngx_string("value"), ngx_pq_output_type_value }, { ngx_null_string, 0 } };
-                for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
-                if (!e[j].name.len) return "\"output\" value must be \"value\"";
-                query->output.type = e[j].value;
-            } else {
-                static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_type_csv }, { ngx_string("plain"), ngx_pq_output_type_plain }, { ngx_string("value"), ngx_pq_output_type_value }, { ngx_null_string, 0 } };
-                for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
-                if (!e[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
-                query->output.type = e[j].value;
-            }
+            static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_type_csv }, { ngx_string("plain"), ngx_pq_output_type_plain }, { ngx_string("value"), ngx_pq_output_type_value }, { ngx_null_string, 0 } };
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
+            if (!e[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
+            query->output.type = e[j].value;
             switch (query->output.type) {
                 case ngx_pq_output_type_csv: {
                     ngx_str_set(&query->output.null, "");
@@ -544,7 +561,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
         ngx_memzero(argument, sizeof(*argument));
         ngx_str_t value = str[i];
         ngx_str_t oid = ngx_null_string;
-        if (cmd->offset & ngx_pq_type_query || cmd->offset & ngx_pq_type_function) {
+        if (cmd->offset & ngx_pq_type_query) {
             u_char *colon;
             if ((colon = ngx_strstrn(value.data, "::", sizeof("::") - 1 - 1))) {
                 value.len = colon - value.data;
