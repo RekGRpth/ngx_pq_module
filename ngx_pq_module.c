@@ -299,8 +299,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     ngx_int_t rc = NGX_OK;
     const char *value;
 //    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->result)));
-//    if (s->result) 
-    switch (PQresultStatus(s->result)) {
+    if (s->result) switch (PQresultStatus(s->result)) {
         case PGRES_TUPLES_OK: {
             if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->result)), value); }
             else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->result))); }
