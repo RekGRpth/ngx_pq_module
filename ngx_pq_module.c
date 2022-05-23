@@ -760,6 +760,11 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     s->data = NULL;
     ngx_pq_srv_conf_t *pscf = d->pscf;
     if (!ngx_queue_empty(&d->queue)) {
+        PGcancel *cancel = PQgetCancel(s->conn);
+        if (!cancel) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(s->conn), "!PQgetCancel"); return; }
+        char errbuf[256];
+        if (!PQcancel(cancel, errbuf, sizeof(errbuf))) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel"); PQfreeCancel(cancel); return; }
+        PQfreeCancel(cancel);
     }
     if (pc->connection) return;
     if (!pscf) return;
