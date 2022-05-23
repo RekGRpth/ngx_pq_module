@@ -131,6 +131,11 @@ typedef struct ngx_pq_save_t {
     PGresult *result;
 } ngx_pq_save_t;
 
+typedef struct {
+    ngx_pq_query_t *query;
+    ngx_queue_t queue;
+} ngx_pq_query_queue_t;
+
 typedef struct ngx_pq_data_t {
     ngx_http_request_t *request;
     ngx_peer_connection_t peer;
@@ -401,6 +406,10 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         } else if (query[i].type & ngx_pq_type_execute) {
             if (!PQsendQueryPrepared(s->conn, (const char *)query[i].name.str.data, nParams, (const char *const *)paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); return NGX_ERROR; }
         }
+        ngx_pq_query_queue_t *qq;
+        if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+        ngx_queue_insert_tail(&d->queue, &qq->queue);
+        qq->query = &query[i];
     }
     if (!PQpipelineSync(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQpipelineSync"); return NGX_ERROR; }
 //    if (!PQexitPipelineMode(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQexitPipelineMode"); return NGX_ERROR; }
