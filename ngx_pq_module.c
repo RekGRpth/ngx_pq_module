@@ -232,7 +232,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         if (!(paramTypes = ngx_pnalloc(r->pool, nParams * sizeof(*paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         if (!(paramValues = ngx_pnalloc(r->pool, nParams * sizeof(*paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         for (ngx_uint_t j = 0; j < nParams; j++) {
-            if (argument[j].oid.index) {
+            if (argument[j].oid.index && (query[i].type & ngx_pg_type_function || query[i].type & ngx_pg_type_query || query[i].type & ngx_pg_type_prepare)) {
                 ngx_http_variable_value_t *value;
                 if (!(value = ngx_http_get_indexed_variable(r, argument[j].oid.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
                 ngx_int_t n = ngx_atoi(value->data, value->len);
@@ -240,7 +240,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
                 argument[j].oid.value = n;
             }
             paramTypes[j] = argument[j].oid.value;
-            if (argument[j].value.index) {
+            if (argument[j].value.index && (query[i].type & ngx_pg_type_function || query[i].type & ngx_pg_type_query || query[i].type & ngx_pg_type_execute)) {
                 ngx_http_variable_value_t *value;
                 if (!(value = ngx_http_get_indexed_variable(r, argument[j].value.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
                 argument[j].value.str.data = value->data;
