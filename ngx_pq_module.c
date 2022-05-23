@@ -239,15 +239,14 @@ static char *PQerrorMessageMy(const PGconn *conn) {
     return err;
 }
 
-
-static char *PQresultErrorMessageMy(const PGresult *res) {
+/*static char *PQresultErrorMessageMy(const PGresult *res) {
     char *err = PQresultErrorMessage(res);
     if (!err) return err;
     int len = strlen(err);
     if (!len) return err;
     if (err[len - 1] == '\n') err[len - 1] = '\0';
     return err;
-}
+}*/
 
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
     ngx_http_request_t *r = d->request;
@@ -355,7 +354,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
     }
     ngx_pq_loc_conf_t *plcf = d->plcf;
-    ngx_pq_save_t *s;
+    ngx_pq_save_t *s = NULL;
     if (pc->connection) {
         ngx_connection_t *c = pc->connection;
         for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
@@ -623,6 +622,19 @@ static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     return ngx_log_set_log(cf, &pscf->log);
 }
 
+static void ngx_pq_read_handler(ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+    ngx_connection_t *c = ev->data;
+    ngx_pq_save_t *s = c->data;
+//    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && ngx_pq_process(s) == NGX_OK) { ngx_add_timer(c->read, s->timeout); return; }
+    c->data = s->keep.data;
+    s->keep.read_handler(ev);
+}
+
+static void ngx_pq_write_handler(ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+}
+
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
     ngx_pq_data_t *d = data;
@@ -642,8 +654,8 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     s->keep.read_handler = c->read->handler;
     s->keep.write_handler = c->write->handler;
     c->data = s;
-    c->read->handler = ngx_pq_save_read_handler;
-    c->write->handler = ngx_pq_save_write_handler;
+    c->read->handler = ngx_pq_read_handler;
+    c->write->handler = ngx_pq_write_handler;
     if (!pscf->log) return;
     c->log = pscf->log;
     c->pool->log = c->log;
@@ -722,17 +734,20 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
 }
 
+static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+}
+
+static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+}
+
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
-    if (u->peer.get != ngx_pq_peer_get) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer is not pq"); return NGX_ERROR; }
-    ngx_pq_data_t *d = u->peer.data;
-    ngx_pq_save_t *s = d->save;
-    ngx_connection_t *c = s->connection;
-    c->data = d;
-    c->read->handler = ngx_pq_data_read_handler;
-    c->write->handler = ngx_pq_data_write_handler;
     r->state = 0;
+    u->read_event_handler = ngx_pq_read_event_handler;
+    u->write_event_handler = ngx_pq_write_event_handler;
     return NGX_OK;
 }
 
