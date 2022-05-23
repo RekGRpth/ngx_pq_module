@@ -639,8 +639,8 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     s->keep.read_handler = c->read->handler;
     s->keep.write_handler = c->write->handler;
     c->data = s;
-    c->read->handler = ngx_pq_read_handler;
-    c->write->handler = ngx_pq_write_handler;
+    c->read->handler = ngx_pq_save_read_handler;
+    c->write->handler = ngx_pq_save_write_handler;
     if (!pscf->log) return;
     c->log = pscf->log;
     c->pool->log = c->log;
@@ -706,6 +706,7 @@ static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
     u->headers_in.status_n = NGX_HTTP_OK;
     u->keepalive = !u->headers_in.connection_close;
     if (!plcf->queries.nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries"); return NGX_ERROR; }
+    u->request_sent = 1; // force to reinit_request
     return NGX_OK;
 }
 
@@ -720,6 +721,14 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    if (u->peer.get != ngx_pq_peer_get) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer is not pq"); return NGX_ERROR; }
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    ngx_connection_t *c = s->connection;
+    c->data = d;
+    c->read->handler = ngx_pq_data_read_handler;
+    c->write->handler = ngx_pq_data_write_handler;
     r->state = 0;
     return NGX_OK;
 }
