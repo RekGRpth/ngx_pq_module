@@ -381,7 +381,9 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     }
     if (pc->sockaddr->sa_family != AF_UNIX) {
         keywords[i] = "host";
-        values[i] = (const char *)pc->name->data;
+        ngx_http_upstream_t *u = r->upstream;
+        ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+        values[i] = (const char *)uscf->host.data;
         i++;
     }
     ngx_str_t addr;
