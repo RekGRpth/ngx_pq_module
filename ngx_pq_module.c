@@ -39,13 +39,6 @@ enum {
     ngx_pq_type_upstream = 1 << 5,
 };
 
-typedef enum {
-    ngx_pq_output_type_csv = 2,
-    ngx_pq_output_type_none = 0,
-    ngx_pq_output_type_plain = 3,
-    ngx_pq_output_type_value = 1,
-} ngx_pq_output_type_t;
-
 typedef struct {
     struct {
         ngx_int_t index;
@@ -78,11 +71,12 @@ typedef struct {
     ngx_pq_connect_t connect;
 } ngx_pq_loc_conf_t;
 
+typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     ngx_flag_t header;
     ngx_flag_t string;
+    ngx_int_t (*handler) (ngx_pq_data_t *d);
     ngx_int_t index;
-    ngx_pq_output_type_t type;
     ngx_str_t null;
     u_char delimiter;
     u_char escape;
@@ -111,7 +105,6 @@ typedef struct {
     ngx_pq_connect_t connect;
 } ngx_pq_srv_conf_t;
 
-typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct ngx_pq_save_t ngx_pq_save_t;
 typedef struct ngx_pq_save_t {
     ngx_array_t channels;
@@ -304,36 +297,46 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     ngx_int_t rc = NGX_OK;
     const char *value;
 //    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->result)));
-    if (s->result) switch (PQresultStatus(s->result)) {
-        case PGRES_TUPLES_OK: {
-            if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->result)), value); }
-            else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->result))); }
-            if (rc == NGX_OK) rc = ngx_pq_output_value_handler(d);
-        } break;
-        case PGRES_FATAL_ERROR: {
-            if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->result)), value); }
-            else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); }
-        } break;
-        default: break;
-            // fall through
-//        case PGRES_COMMAND_OK: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-        /*case PGRES_FATAL_ERROR: return ngx_pq_error(d);
-        case PGRES_COMMAND_OK:
-        case PGRES_TUPLES_OK:
-            if (rc == NGX_OK) {
-                rc = ngx_pq_rewrite_set(d);
-                if (rc < NGX_HTTP_SPECIAL_RESPONSE) rc = NGX_OK;
-            }
-            if (rc == NGX_OK) rc = ngx_pq_variable_set(d);
-            if (rc == NGX_OK) rc = ngx_pq_variable_output(d);
-            // fall through
-        case PGRES_SINGLE_TUPLE:
-            if (PQresultStatus(s->res) == PGRES_SINGLE_TUPLE) d->result.nsingle++;
-            if (rc == NGX_OK && queryelts[d->query].output.handler) rc = queryelts[d->query].output.handler(d); // fall through
-        default:
-            if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
-            else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
-            return rc;*/
+    if (s->result) {
+        if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+        ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+        ngx_pq_query_t *query = d->query = qq->query;
+        switch (PQresultStatus(s->result)) {
+            case PGRES_TUPLES_OK: {
+                if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->result)), value); }
+                else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->result))); }
+                if (rc == NGX_OK) rc = ngx_pq_output_value_handler(d);
+            } break;
+            case PGRES_FATAL_ERROR: {
+                if ((value = PQcmdStatus(s->result)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->result)), value); }
+                else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->result), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); }
+            } break;
+            default: break;
+                // fall through
+    //        case PGRES_COMMAND_OK: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+            /*case PGRES_FATAL_ERROR: return ngx_pq_error(d);
+            case PGRES_COMMAND_OK:
+            case PGRES_TUPLES_OK:
+                if (rc == NGX_OK) {
+                    rc = ngx_pq_rewrite_set(d);
+                    if (rc < NGX_HTTP_SPECIAL_RESPONSE) rc = NGX_OK;
+                }
+                if (rc == NGX_OK) rc = ngx_pq_variable_set(d);
+                if (rc == NGX_OK) rc = ngx_pq_variable_output(d);
+                // fall through
+            case PGRES_SINGLE_TUPLE:
+                if (PQresultStatus(s->res) == PGRES_SINGLE_TUPLE) d->result.nsingle++;
+                if (rc == NGX_OK && queryelts[d->query].output.handler) rc = queryelts[d->query].output.handler(d); // fall through
+            default:
+                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+                else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
+                return rc;*/
+        }
+        if (!(query->type & ngx_pq_type_location)) return rc;
+    }
+    if (ngx_queue_empty(&d->queue)) {
     }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
@@ -624,29 +627,33 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
                 if ((query->output.index = ngx_http_get_variable_index(cf, &name)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
                 variable->get_handler = ngx_pq_variable_get_handler;
                 variable->data = query->output.index;
-                query->output.type = ngx_pq_output_type_value;
+//                query->output.type = ngx_pq_output_type_value;
                 continue;
             }
             if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            static const struct {
+                ngx_str_t name;
+                ngx_int_t (*handler) (ngx_pq_data_t *d);
+            } h[] = {
+                { ngx_string("plain"), ngx_pq_output_plain_handler },
+                { ngx_string("csv"), ngx_pq_output_csv_handler },
+                { ngx_string("value"), ngx_pq_output_value_handler },
+                { ngx_null_string, NULL }
+            };
             ngx_uint_t j;
-            static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_type_csv }, { ngx_string("plain"), ngx_pq_output_type_plain }, { ngx_string("value"), ngx_pq_output_type_value }, { ngx_null_string, 0 } };
-            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
-            if (!e[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
-            query->output.type = e[j].value;
-            switch (query->output.type) {
-                case ngx_pq_output_type_csv: {
-                    ngx_str_set(&query->output.null, "");
-                    query->output.delimiter = ',';
-                    query->output.escape = '"';
-                    query->output.header = 1;
-                    query->output.quote = '"';
-                } break;
-                case ngx_pq_output_type_plain: {
-                    ngx_str_set(&query->output.null, "\\N");
-                    query->output.delimiter = '\t';
-                    query->output.header = 1;
-                } break;
-                default: break;
+            for (j = 0; h[j].name.len; j++) if (h[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(h[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
+            if (!h[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
+            query->output.handler = h[j].handler;
+            if (query->output.handler == ngx_pq_output_csv_handler) {
+                ngx_str_set(&query->output.null, "");
+                query->output.delimiter = ',';
+                query->output.escape = '"';
+                query->output.header = 1;
+                query->output.quote = '"';
+            } else if (query->output.handler == ngx_pq_output_plain_handler) {
+                ngx_str_set(&query->output.null, "\\N");
+                query->output.delimiter = '\t';
+                query->output.header = 1;
             }
             continue;
         }
