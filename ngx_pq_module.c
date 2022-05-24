@@ -419,10 +419,9 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         *p = '\0';
         if (query[i].type & ngx_pq_type_query) {
             if (!PQsendQueryParams(s->conn, (const char *)sql.data, nParams, paramTypes, (const char *const *)paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); return NGX_ERROR; }
-        } else if (query[i].type & ngx_pq_type_prepare) {
-            if (!PQsendPrepare(s->conn, (const char *)query[i].name.str.data, (const char *)sql.data, nParams, paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); return NGX_ERROR; }
-        } else if (query[i].type & ngx_pq_type_execute) {
-            if (!PQsendQueryPrepared(s->conn, (const char *)query[i].name.str.data, nParams, (const char *const *)paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); return NGX_ERROR; }
+        } else {
+            if (query[i].type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query[i].name.str.data, (const char *)sql.data, nParams, paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); return NGX_ERROR; }
+            if (query[i].type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query[i].name.str.data, nParams, (const char *const *)paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); return NGX_ERROR; }
         }
         ngx_pq_query_queue_t *qq;
         if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
