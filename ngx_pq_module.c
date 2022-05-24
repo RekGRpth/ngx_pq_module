@@ -243,26 +243,28 @@ static char *PQresultErrorMessageMy(const PGresult *res) {
     return err;
 }
 
-static ngx_buf_t *ngx_pq_buffer(ngx_http_request_t *r, size_t size) {
+static ngx_int_t ngx_pq_output_handler(ngx_http_request_t *r, size_t len, const u_char *data) {
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%*s", (int)len, data);
+    if (!len) return NGX_OK;
     ngx_http_upstream_t *u = r->upstream;
     ngx_chain_t *cl, **ll;
     for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
-    if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NULL; }
+    if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
     *ll = cl;
     ngx_buf_t *b = cl->buf;
     if (b->start) ngx_pfree(r->pool, b->start);
-    if (!(b->start = ngx_palloc(r->pool, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NULL; }
-    b->end = b->start + size;
+    if (!(b->start = ngx_palloc(r->pool, len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NGX_ERROR; }
+    b->end = b->start + len;
     b->flush = 1;
-    b->last = b->start;
+    b->last = ngx_copy(b->start, data, len);
     b->memory = 1;
     b->pos = b->start;
     b->tag = u->output.tag;
     b->temporary = 1;
-    return b;
+    return NGX_OK;
 }
 
-static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
+static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
@@ -285,14 +287,8 @@ static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
 static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_buf_t *b;
     ngx_pq_save_t *s = d->save;
-    size_t size;
-    for (int row = 0; row < PQntuples(s->result); row++) for (int col = 0; col < PQnfields(s->result); col++) {
-        if (!(size = PQgetlength(s->result, row, col))) continue;
-        if (!(b = ngx_pq_buffer(r, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
-        if ((b->last = ngx_copy(b->last, PQgetvalue(s->result, row, col), size)) != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
-    }
+    for (int row = 0; row < PQntuples(s->result); row++) for (int col = 0; col < PQnfields(s->result); col++) if (ngx_pq_output_handler(r, PQgetlength(s->result, row, col), (const u_char *)PQgetvalue(s->result, row, col)) == NGX_ERROR) return NGX_ERROR;
     return NGX_OK;
 }
 
@@ -348,7 +344,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
         ngx_http_upstream_t *u = r->upstream;
-        ngx_pg_upstream_finalize_request(r, u, s->rc);
+        ngx_pq_upstream_finalize_request(r, u, s->rc);
     }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
@@ -890,19 +886,19 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
-    if (PQstatus(s->conn) == CONNECTION_OK && !PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if (PQstatus(s->conn) == CONNECTION_OK && !PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->rc = NGX_OK;
     while (PQstatus(s->conn) == CONNECTION_OK && (s->result = PQgetResult(s->conn))) {
         if (s->rc == NGX_OK && s->read_handler) s->rc = s->read_handler(s);
         PQclear(s->result);
     }
-    if ((s->result = PQgetResult(s->conn)) && PQresultStatus(s->result) != PGRES_PIPELINE_SYNC) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return; }
-    if ((s->result = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQgetResult"); ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return; }
-    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if ((s->result = PQgetResult(s->conn)) && PQresultStatus(s->result) != PGRES_PIPELINE_SYNC) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if ((s->result = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQgetResult"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->result = NULL;
     if (s->rc == NGX_OK && s->read_handler) s->rc = s->read_handler(s);
     switch (s->rc) {
-        case NGX_ERROR: ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return;
+        case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
     }
 }
 
@@ -913,7 +909,7 @@ static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_
     s->rc = NGX_OK;
     if (s->rc == NGX_OK && s->write_handler) s->rc = s->write_handler(s);
     switch (s->rc) {
-        case NGX_ERROR: ngx_pg_upstream_finalize_request(r, u, NGX_ERROR); return;
+        case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
     }
 }
 
