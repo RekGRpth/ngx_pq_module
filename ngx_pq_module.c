@@ -314,10 +314,10 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
 //    ngx_pq_loc_conf_t *plc = ngx_http_get_module_loc_conf(r, ngx_pq_module);
 //    ngx_pq_query_t *queryelts = plc->query.elts;
     s->rc = NGX_OK;
-    const char *value;
 //    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->result)));
     if (s->result) {
         if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); s->rc = NGX_ERROR; return s->rc; }
+        const char *value;
         ngx_queue_t *q = ngx_queue_head(&d->queue);
         ngx_queue_remove(q);
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
@@ -358,7 +358,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
         ngx_http_upstream_t *u = r->upstream;
-        if (u->cleanup) (*u->cleanup)(r);
+        ngx_pg_upstream_finalize_request(r, u, NGX_OK);
     }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
