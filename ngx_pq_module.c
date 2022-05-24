@@ -245,7 +245,7 @@ static char *PQresultErrorMessageMy(const PGresult *res) {
     return err;
 }
 
-static ngx_int_t ngx_pq_output_handler(ngx_http_request_t *r, size_t len, const u_char *data) {
+static ngx_int_t ngx_pq_output(ngx_http_request_t *r, size_t len, const u_char *data) {
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%*s", (int)len, data);
     if (!len) return NGX_OK;
     ngx_http_upstream_t *u = r->upstream;
@@ -292,35 +292,35 @@ static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_pq_query_t *query = d->query;
     ngx_pq_save_t *s = d->save;
     if (query->output.header) for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-        if (d->col > 0) if (ngx_pq_output_handler(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
-        if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+        if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
+        if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
         const u_char *data = (const u_char *)PQfname(s->res, d->col);
         ngx_uint_t len = ngx_strlen(data);
         if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
-            if (data[k] == query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
-            if (ngx_pq_output_handler(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
+            if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
+            if (ngx_pq_output(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
         } else {
-            if (ngx_pq_output_handler(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
+            if (ngx_pq_output(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
         }
-        if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+        if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
     }
     for (d->row = 0; d->row < PQntuples(s->res); d->row++) {
-        if (d->row > 1 || query->output.header) if (ngx_pq_output_handler(r, sizeof("\n") - 1, (const u_char *)"\n") == NGX_ERROR) return NGX_ERROR;
+        if (d->row > 1 || query->output.header) if (ngx_pq_output(r, sizeof("\n") - 1, (const u_char *)"\n") == NGX_ERROR) return NGX_ERROR;
         for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-            if (d->col > 0) if (ngx_pq_output_handler(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
+            if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
             if (PQgetisnull(s->res, d->row, d->col)) {
-                if (query->output.null.len) if (ngx_pq_output_handler(r, query->output.null.len, query->output.null.data) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.null.len) if (ngx_pq_output(r, query->output.null.len, query->output.null.data) == NGX_ERROR) return NGX_ERROR;
             } else {
-                if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
                 const u_char *data = (const u_char *)PQgetvalue(s->res, d->row, d->col);
                 ngx_uint_t len = PQgetlength(s->res, d->row, d->col);
                 if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
-                    if (data[k] == query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
-                    if (ngx_pq_output_handler(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
+                    if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
+                    if (ngx_pq_output(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
                 } else {
-                    if (ngx_pq_output_handler(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
+                    if (ngx_pq_output(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
                 }
-                if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
             }
         }
     }
@@ -377,7 +377,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
         }
         if (!(query->type & ngx_pq_type_location)) return s->rc;
         ngx_http_request_t *r = d->request;
-        if (s->rc == NGX_OK && ((query->output.handler && query->output.handler != ngx_pq_output_value_handler) || d->row)) s->rc = ngx_pq_output_handler(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
+        if (s->rc == NGX_OK && ((query->output.handler && query->output.handler != ngx_pq_output_value_handler) || d->row)) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
