@@ -255,16 +255,16 @@ static ngx_buf_t *ngx_pq_buffer(ngx_http_request_t *r, size_t size) {
     for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
     if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NULL; }
     *ll = cl;
-    cl->buf->flush = 1;
-    cl->buf->memory = 1;
     ngx_buf_t *b = cl->buf;
     if (b->start) ngx_pfree(r->pool, b->start);
     if (!(b->start = ngx_palloc(r->pool, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NULL; }
-    b->pos = b->start;
-    b->last = b->start;
     b->end = b->last + size;
-    b->temporary = 1;
+    b->flush = 1;
+    b->last = b->start;
+    b->memory = 1;
+    b->pos = b->start;
     b->tag = u->output.tag;
+    b->temporary = 1;
     return b;
 }
 
