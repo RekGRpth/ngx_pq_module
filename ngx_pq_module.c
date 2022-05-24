@@ -851,7 +851,6 @@ static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
         u->resolved->no_port = 1;
     }
     u->headers_in.status_n = NGX_HTTP_OK;
-    u->keepalive = !u->headers_in.connection_close;
     if (!plcf->queries.nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries"); return NGX_ERROR; }
     u->request_sent = 1; // force to reinit_request
     return NGX_OK;
@@ -865,6 +864,8 @@ static ngx_int_t ngx_pq_process_header(ngx_http_request_t *r) {
 static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
     ngx_http_upstream_t *u = r->upstream;
+    u->keepalive = !u->headers_in.connection_close;
+    u->request_body_sent = 1;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (!s) return;
