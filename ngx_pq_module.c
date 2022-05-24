@@ -289,8 +289,14 @@ static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
 static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_pq_query_t *query = d->query;
     ngx_pq_save_t *s = d->save;
-    for (d->row = 0; d->row < PQntuples(s->res); d->row++) for (d->col = 0; d->col < PQnfields(s->res); d->col++) if (ngx_pq_output_handler(r, PQgetlength(s->res, d->row, d->col), (const u_char *)PQgetvalue(s->res, d->row, d->col)) == NGX_ERROR) return NGX_ERROR;
+    for (d->row = 0; d->row < PQntuples(s->res); d->row++) {
+        if (d->row > 1 || query->output.header) if (ngx_pq_output_handler(r, sizeof("\n") - 1, (const u_char *)"\n") == NGX_ERROR) return NGX_ERROR;
+        for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
+            if (ngx_pq_output_handler(r, PQgetlength(s->res, d->row, d->col), (const u_char *)PQgetvalue(s->res, d->row, d->col)) == NGX_ERROR) return NGX_ERROR;
+        }
+    }
     return NGX_OK;
 }
 
