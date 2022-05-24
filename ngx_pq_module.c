@@ -505,22 +505,19 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_str_t host = uscf->host;
         for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
 found:
+        host.data[host.len] = '\0';
         for (ngx_uint_t j = 0; j < host.len; j++) if (host.data[j] == ':') { host.data[j] = '\0'; break; }
         values[i] = (const char *)host.data;
         i++;
     }
-    ngx_str_t addr;
-    if (!(addr.data = ngx_pcalloc(r->pool, NGX_SOCKADDR_STRLEN + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-    if (!(addr.len = ngx_sock_ntop(pc->sockaddr, pc->socklen, addr.data, NGX_SOCKADDR_STRLEN, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_sock_ntop"); return NGX_ERROR; }
+    u_char *p;
+    if (!(p = ngx_pnalloc(r->pool, pc->name->len + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+    (void)ngx_cpystrn(p, pc->name->data, pc->name->len + 1);
     keywords[i] = pc->sockaddr->sa_family != AF_UNIX ? "hostaddr" : "host";
-    values[i] = (const char *)addr.data + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
+    values[i] = (const char *)p + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
     i++;
     keywords[i] = "port";
-    if (!(values[i] = ngx_pnalloc(r->pool, sizeof("65535") - 1 + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
-    ngx_uint_t port = ngx_inet_get_port(pc->sockaddr);
-    if (port <= 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port <= 0"); return NGX_ERROR; }
-    if (port >= 65536) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port >= 65536"); return NGX_ERROR; }
-    *ngx_sprintf(values[i], "%ui", port) = '\0';
+    for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (const char *)&p[j + 1]; break; }
     i++;
     keywords[i] = NULL;
     values[i] = NULL;
