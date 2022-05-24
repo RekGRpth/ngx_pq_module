@@ -867,6 +867,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_http_upstream_t *u = r->upstream;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
+    if (!s) return;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "s->rc = %i", s->rc);
     switch (s->rc) {
         case NGX_ERROR: s->rc = ngx_http_filter_finalize_request(r, NULL, NGX_HTTP_INTERNAL_SERVER_ERROR); return;
