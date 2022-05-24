@@ -350,11 +350,6 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
                 else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
                 if (s->rc == NGX_OK && query->output.handler) s->rc = query->output.handler(d);
             } break;
-            case PGRES_FATAL_ERROR: {
-                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
-                else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
-                s->rc = NGX_ERROR;
-            } break;
             default: break;
         }
         if (!(query->type & ngx_pq_type_location)) return s->rc;
@@ -896,11 +891,24 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
     ngx_pq_save_t *s = d->save;
     if (PQstatus(s->conn) == CONNECTION_OK && !PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->rc = NGX_OK;
-    while (PQstatus(s->conn) == CONNECTION_OK && (s->res = PQgetResult(s->conn))) {
+    const char *value;
+    while (PQstatus(s->conn) == CONNECTION_OK) {
+        if (!(s->res = PQgetResult(s->conn))) continue;
+        if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+        else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
+        switch (PQresultStatus(s->res)) {
+            case PGRES_FATAL_ERROR: {
+                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+                else { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
+                ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
+            } break;
+            case PGRES_PIPELINE_SYNC: goto done;
+            default: break;
+        }
         if (s->rc == NGX_OK && s->read_handler) s->rc = s->read_handler(s);
         PQclear(s->res);
     }
-    if ((s->res = PQgetResult(s->conn)) && PQresultStatus(s->res) != PGRES_PIPELINE_SYNC) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
+done:
     if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQgetResult"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->res = NULL;
