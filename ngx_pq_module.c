@@ -502,9 +502,11 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_http_upstream_t *u = r->upstream;
         ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
         ngx_http_upstream_server_t *us = uscf->servers->elts;
-        values[i] = (const char *)uscf->host.data;
-        for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { values[i] = (const char *)us[j].name.data; goto found; }
+        ngx_str_t host = uscf->host;
+        for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
 found:
+        for (ngx_uint_t j = 0; j < host.len; j++) if (host.data[j] == ':') { host.data[j] = '\0'; break; }
+        values[i] = (const char *)host.data;
         i++;
     }
     ngx_str_t addr;
