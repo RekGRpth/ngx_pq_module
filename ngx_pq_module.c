@@ -501,6 +501,10 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         keywords[i] = "host";
         ngx_http_upstream_t *u = r->upstream;
         ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+        ngx_http_upstream_server_t *us = uscf->servers->elts;
+        for (ngx_uint_t i = 0; i < uscf->servers->nelts; i++) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i = %V", i, &us[i].name);
+        }
         values[i] = (const char *)uscf->host.data;
         i++;
     }
