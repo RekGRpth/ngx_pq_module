@@ -107,7 +107,6 @@ typedef struct {
 
 typedef struct ngx_pq_save_t ngx_pq_save_t;
 typedef struct ngx_pq_save_t {
-    ngx_array_t channels;
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_int_t (*read_handler) (ngx_pq_save_t *s);
@@ -442,11 +441,6 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
-    ngx_str_t *channel = s->channels.elts;
-    if (!ngx_terminate && !ngx_exiting && !c->error) for (ngx_uint_t i = 0; i < s->channels.nelts; i++) {
-        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel[%ui] = %V", i, &channel[i]);
-//        ngx_http_push_stream_delete_channel_my(c->log, &channel[i], NULL, 0, c->pool);
-    }
     PQfinish(s->conn);
 }
 
