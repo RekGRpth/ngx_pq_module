@@ -258,7 +258,7 @@ static ngx_buf_t *ngx_pq_buffer(ngx_http_request_t *r, size_t size) {
     ngx_buf_t *b = cl->buf;
     if (b->start) ngx_pfree(r->pool, b->start);
     if (!(b->start = ngx_palloc(r->pool, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NULL; }
-    b->end = b->last + size;
+    b->end = b->start + size;
     b->flush = 1;
     b->last = b->start;
     b->memory = 1;
