@@ -502,18 +502,8 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_http_upstream_t *u = r->upstream;
         ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
         ngx_http_upstream_server_t *us = uscf->servers->elts;
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "pc->name = %V", pc->name);
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "pc->sockaddr = %p", pc->sockaddr);
         values[i] = (const char *)uscf->host.data;
-        for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) {
-            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0, "us[%i].name = %V", j, &us[j].name);
-            for (ngx_uint_t k = 0; k < us[j].naddrs; k++) {
-                ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0, "addrs[%i].name = %V", k, &us[j].addrs[k].name);
-                ngx_log_debug2(NGX_LOG_DEBUG_HTTP, pc->log, 0, "addrs[%i].sockaddr = %p", k, us[j].addrs[k].sockaddr);
-                if (pc->sockaddr == us[j].addrs[k].sockaddr) { values[i] = (const char *)us[j].name.data; goto found; }
-//                if (!ngx_memn2cmp((u_char *)pc->sockaddr, (u_char *)connect[j].url.addrs[k].sockaddr, pc->socklen, connect[j].url.addrs[k].socklen)) { connect = &connect[j]; goto found; }
-            }
-        }
+        for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { values[i] = (const char *)us[j].name.data; goto found; }
 found:
         i++;
     }
