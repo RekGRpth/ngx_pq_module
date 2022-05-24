@@ -126,6 +126,8 @@ typedef struct {
 
 typedef struct ngx_pq_data_t {
     ngx_http_request_t *request;
+    ngx_int_t col;
+    ngx_int_t row;
     ngx_peer_connection_t peer;
     ngx_pq_loc_conf_t *plcf;
     ngx_pq_query_t *query;
@@ -288,7 +290,7 @@ static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_save_t *s = d->save;
-    for (int row = 0; row < PQntuples(s->result); row++) for (int col = 0; col < PQnfields(s->result); col++) if (ngx_pq_output_handler(r, PQgetlength(s->result, row, col), (const u_char *)PQgetvalue(s->result, row, col)) == NGX_ERROR) return NGX_ERROR;
+    for (d->row = 0; d->row < PQntuples(s->result); d->row++) for (d->col = 0; d->col < PQnfields(s->result); d->col++) if (ngx_pq_output_handler(r, PQgetlength(s->result, d->row, d->col), (const u_char *)PQgetvalue(s->result, d->row, d->col)) == NGX_ERROR) return NGX_ERROR;
     return NGX_OK;
 }
 
