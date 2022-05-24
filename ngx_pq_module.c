@@ -915,9 +915,10 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
     u->header_sent = 1;
-    if (!u->out_bufs) return;
-    u->out_bufs->next = NULL;
-    ngx_buf_t *b = u->out_bufs->buf;
+    ngx_chain_t *cl;
+    if (!(cl = u->out_bufs)) return;
+    while (cl->next) cl = cl->next;
+    ngx_buf_t *b = cl->buf;
     if (r == r->main && !r->post_action) b->last_buf = 1; else {
         b->sync = 1;
         b->last_in_chain = 1;
