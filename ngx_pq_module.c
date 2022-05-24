@@ -294,12 +294,10 @@ static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_buf_t *b;
     ngx_pq_save_t *s = d->save;
     size_t size;
-    for (int row = 0; row < PQntuples(s->result); row++) {
-        for (int col = 0; col < PQnfields(s->result); col++) {
-            if (!(size = PQgetlength(s->result, row, col))) continue;
-            if (!(b = ngx_pq_buffer(r, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
-            if ((b->last = ngx_copy(b->last, PQgetvalue(s->result, row, col), size)) != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
-        }
+    for (int row = 0; row < PQntuples(s->result); row++) for (int col = 0; col < PQnfields(s->result); col++) {
+        if (!(size = PQgetlength(s->result, row, col))) continue;
+        if (!(b = ngx_pq_buffer(r, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
+        if ((b->last = ngx_copy(b->last, PQgetvalue(s->result, row, col), size)) != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
     }
     return NGX_OK;
 }
