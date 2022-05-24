@@ -299,7 +299,14 @@ static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
                 if (query->output.null.len) if (ngx_pq_output_handler(r, query->output.null.len, query->output.null.data) == NGX_ERROR) return NGX_ERROR;
             } else {
                 if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
-                if (ngx_pq_output_handler(r, PQgetlength(s->res, d->row, d->col), (const u_char *)PQgetvalue(s->res, d->row, d->col)) == NGX_ERROR) return NGX_ERROR;
+                const u_char *data = (const u_char *)PQgetvalue(s->res, d->row, d->col);
+                ngx_uint_t len = PQgetlength(s->res, d->row, d->col);
+                if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
+                    if (data[k] == query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
+                    if (ngx_pq_output_handler(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
+                } else {
+                    if (ngx_pq_output_handler(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
+                }
                 if (query->output.string && query->output.quote) if (ngx_pq_output_handler(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
             }
         }
