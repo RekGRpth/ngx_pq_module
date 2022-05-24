@@ -272,7 +272,7 @@ static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
-    s->rc = rc;
+    if (s) s->rc = rc;
     if (u->cleanup) (*u->cleanup)(r);
 }
 
@@ -354,7 +354,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
         ngx_http_upstream_t *u = r->upstream;
-        ngx_pg_upstream_finalize_request(r, u, NGX_OK);
+        ngx_pg_upstream_finalize_request(r, u, s->rc);
     }
     /*if (rc != NGX_OK) return rc;
     for (d->query++; d->query < plc->query.nelts; d->query++) if (!queryelts[d->query].method || queryelts[d->query].method & r->method) break;
