@@ -427,14 +427,14 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         ngx_queue_insert_tail(&d->queue, &qq->queue);
         qq->query = &query[i];
     }
-    if (!PQpipelineSync(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQpipelineSync"); return NGX_ERROR; }
 //    if (!PQexitPipelineMode(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQexitPipelineMode"); return NGX_ERROR; }
+    if (!PQpipelineSync(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQpipelineSync"); return NGX_ERROR; }
     s->read_handler = ngx_pq_result_handler;
     s->write_handler = NULL;
     ngx_connection_t *c = s->connection;
     c->read->active = 1;
     c->write->active = 0;
-    return NGX_OK;
+    return NGX_AGAIN;
 }
 
 static void ngx_pq_save_cln_handler(void *data) {
