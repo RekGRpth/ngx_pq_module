@@ -319,6 +319,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
             case PGRES_FATAL_ERROR: {
                 if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
                 else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
+                s->rc = NGX_ERROR;
             } break;
             default: break;
                 // fall through
@@ -342,6 +343,8 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
                 return rc;*/
         }
         if (!(query->type & ngx_pq_type_location)) return s->rc;
+        ngx_http_request_t *r = d->request;
+        if (s->rc == NGX_OK && ((query->output.handler && query->output.handler != ngx_pq_output_value_handler) || d->row)) s->rc = ngx_pq_output_handler(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
