@@ -373,7 +373,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_save_t *s = d->save;
-    if (!PQenterPipelineMode(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQenterPipelineMode"); return NGX_ERROR; }
+    if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
     ngx_pq_query_t *query = queries->elts;
     for (ngx_uint_t i = 0; i < queries->nelts; i++) {
         ngx_pq_argument_t *argument = query[i].arguments.elts;
@@ -427,8 +427,8 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         ngx_queue_insert_tail(&d->queue, &qq->queue);
         qq->query = &query[i];
     }
-//    if (!PQexitPipelineMode(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQexitPipelineMode"); return NGX_ERROR; }
-    if (!PQpipelineSync(s->conn)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!PQpipelineSync"); return NGX_ERROR; }
+    if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); return NGX_ERROR; }
+//    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return NGX_ERROR; }
     s->read_handler = ngx_pq_result_handler;
     s->write_handler = NULL;
     ngx_connection_t *c = s->connection;
@@ -894,6 +894,9 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
         if (rc == NGX_OK && s->read_handler) rc = s->read_handler(s);
         PQclear(s->result);
     }
+    if ((s->result = PQgetResult(s->conn)) && PQresultStatus(s->result) != PGRES_PIPELINE_SYNC) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQresultStatus == %s", PQresStatus(PQresultStatus(s->result))); return; }
+    if ((s->result = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQgetResult"); return; }
+    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return; }
     s->result = NULL;
     if (rc == NGX_OK && s->read_handler) rc = s->read_handler(s);
     switch (rc) {
