@@ -960,6 +960,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
     ngx_str_t *str = cf->args->elts;
     ngx_flag_t application_name = 0;
+    u_char *p;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         else if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
@@ -968,10 +969,12 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = 1;
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
-        option->key = str[i];
-        for (option->key.len = 0; option->key.len < str[i].len; option->key.len++) if (option->key.data[option->key.len] == '=') { option->key.data[option->key.len] = '\0'; break; }
+        if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
+        option->key.data = str[i].data;
+        option->key.len = p - str[i].data;
+        option->key.data[option->key.len] = '\0';
+        option->val.data = str[i].data + option->key.len + 1;
         option->val.len = str[i].len - option->key.len - 1;
-        option->val.data = option->key.data + option->key.len + 1;
     }
     if (!application_name) {
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
