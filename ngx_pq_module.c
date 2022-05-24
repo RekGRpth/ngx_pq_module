@@ -274,19 +274,7 @@ static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
     if (u->cleanup) (*u->cleanup)(r);
 }
 
-static ngx_int_t ngx_pq_output_csv_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return NGX_OK;
-}
-
-static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return NGX_OK;
-}
-
-static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
+static ngx_int_t ngx_pq_output_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_query_t *query = d->query;
@@ -325,6 +313,24 @@ static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
         }
     }
     return NGX_OK;
+}
+
+static ngx_int_t ngx_pq_output_csv_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return ngx_pq_output_handler(d);
+}
+
+static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return ngx_pq_output_handler(d);
+}
+
+static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return ngx_pq_output_handler(d);
 }
 
 static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
