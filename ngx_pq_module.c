@@ -291,18 +291,16 @@ static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
 static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-//    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-//    r->headers_out.content_type = core->default_type;
-//    r->headers_out.content_type_len = core->default_type.len;
+    ngx_buf_t *b;
     ngx_pq_save_t *s = d->save;
-//    if (PQntuples(s->res) != 1 || PQnfields(s->res) != 1) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received %i value(s) instead of expected single value in location \"%V\"", PQntuples(s->res) * PQnfields(s->res), &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-//    if (PQgetisnull(s->res, 0, 0)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received NULL value in location \"%V\"", &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    size_t size = PQgetlength(s->result, 0, 0);
-//    if (!size) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "\"postgres_output value\" received empty value in location \"%V\"", &core->name); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    ngx_buf_t *b = ngx_pq_buffer(r, size);
-    if (!b) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
-    b->last = ngx_copy(b->last, PQgetvalue(s->result, 0, 0), size);
-    if (b->last != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
+    size_t size;
+    for (int row = 0; row < PQntuples(s->result); row++) {
+        for (int col = 0; col < PQnfields(s->result); col++) {
+            if (!(size = PQgetlength(s->result, row, col))) continue;
+            if (!(b = ngx_pq_buffer(r, size))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pq_buffer"); return NGX_ERROR; }
+            if ((b->last = ngx_copy(b->last, PQgetvalue(s->result, row, col), size)) != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); return NGX_ERROR; }
+        }
+    }
     return NGX_OK;
 }
 
