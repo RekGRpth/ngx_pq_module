@@ -439,8 +439,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
 
 static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
-    ngx_connection_t *c = s->connection;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     PQfinish(s->conn);
 }
 
