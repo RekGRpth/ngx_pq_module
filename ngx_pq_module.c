@@ -42,7 +42,7 @@ enum {
 typedef struct {
     struct {
         ngx_int_t index;
-        uint32_t value;
+        Oid value;
     } oid;
     struct {
         ngx_int_t index;
@@ -88,10 +88,6 @@ typedef struct {
     ngx_array_t commands;
     ngx_pq_output_t output;
     ngx_uint_t type;
-    struct {
-        ngx_int_t index;
-        uint32_t oid;
-    } function;
     struct {
         ngx_int_t index;
         ngx_str_t str;
