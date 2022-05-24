@@ -132,8 +132,6 @@ typedef struct ngx_pq_data_t {
     ngx_pq_save_t *save;
     ngx_pq_srv_conf_t *pscf;
     ngx_queue_t queue;
-    ngx_uint_t col;
-    ngx_uint_t row;
 } ngx_pq_data_t;
 
 typedef struct {
