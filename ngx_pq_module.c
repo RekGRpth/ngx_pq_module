@@ -79,25 +79,23 @@ typedef struct {
 } ngx_pq_loc_conf_t;
 
 typedef struct {
-    ngx_flag_t header;
-    ngx_flag_t string;
-    ngx_int_t index;
-    ngx_str_t null;
-    ngx_uint_t type;
-    u_char delimiter;
-    u_char escape;
-    u_char quote;
-} ngx_pq_output_t;
-
-typedef struct {
     ngx_array_t arguments;
     ngx_array_t commands;
-    ngx_pq_output_t output;
     ngx_uint_t type;
     struct {
         ngx_int_t index;
         ngx_str_t str;
     } name;
+    struct {
+        ngx_flag_t header;
+        ngx_flag_t string;
+        ngx_int_t index;
+        ngx_str_t null;
+        ngx_uint_t type;
+        u_char delimiter;
+        u_char escape;
+        u_char quote;
+    } output;
 } ngx_pq_query_t;
 
 typedef struct {
