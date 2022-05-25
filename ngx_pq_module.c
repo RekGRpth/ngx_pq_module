@@ -515,6 +515,14 @@ found:
     c->type = pc->type ? pc->type : SOCK_STREAM;
     c->write->log = pc->log;
     if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
+    if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+    ngx_queue_init(&s->query.queue);
+    ngx_pool_cleanup_t *cln;
+    if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
+    cln->data = s;
+    cln->handler = ngx_pq_save_cln_handler;
+    s->conn = conn;
+    s->connection = c;
     if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
         if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "ngx_add_conn");
@@ -531,17 +539,9 @@ found:
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
-    if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
-    ngx_queue_init(&s->query.queue);
-    ngx_pool_cleanup_t *cln;
-    if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
-    cln->data = s;
-    cln->handler = ngx_pq_save_cln_handler;
-    s->conn = conn;
-    s->connection = c;
+    pc->connection = c;
     s->read_handler = ngx_pq_connect_handler;
     s->write_handler = ngx_pq_connect_handler;
-    pc->connection = c;
     return NGX_AGAIN;
 declined:
     PQfinish(conn);
