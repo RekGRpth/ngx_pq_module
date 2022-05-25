@@ -116,7 +116,7 @@ typedef struct {
     ngx_msec_t timeout;
     PGconn *conn;
     PGresult *res;
-    void *keep;
+    void *data;
 } ngx_pq_save_t;
 
 typedef struct {
@@ -738,7 +738,7 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_pq_save_t *s = c->data;
 //    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && ngx_pq_process(s) == NGX_OK) { ngx_add_timer(c->read, s->timeout); return; }
-    c->data = s->keep;
+    c->data = s->data;
     s->read_handler(ev);
 }
 
@@ -765,7 +765,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
-    s->keep = c->data;
+    s->data = c->data;
     s->read_handler = c->read->handler;
     s->write_handler = c->write->handler;
     c->data = s;
