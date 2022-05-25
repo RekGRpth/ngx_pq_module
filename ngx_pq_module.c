@@ -353,40 +353,17 @@ static void ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); s->rc = NGX_ERROR; return; }
-    ngx_pq_query_t *query = queries->elts;
-    for (ngx_uint_t i = 0; i < queries->nelts; i++) {
-        ngx_pq_query_queue_t *qq;
-        if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); s->rc = NGX_ERROR; return; }
-        ngx_queue_insert_tail(&d->queue, &qq->queue);
-        qq->query = &query[i];
-        qq->nParams = query[i].arguments.nelts;
-        ngx_pq_argument_t *argument = query[i].arguments.elts;
-        if (!(qq->paramTypes = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); s->rc = NGX_ERROR; return; }
-        if (!(qq->paramValues = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); s->rc = NGX_ERROR; return; }
-        for (ngx_int_t j = 0; j < qq->nParams; j++) {
-            if (argument[j].oid.index && (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_prepare)) {
-                ngx_http_variable_value_t *value;
-                if (!(value = ngx_http_get_indexed_variable(r, argument[j].oid.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); s->rc = NGX_ERROR; return; }
-                ngx_int_t n = ngx_atoi(value->data, value->len);
-                if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_atoi == NGX_ERROR"); s->rc = NGX_ERROR; return; }
-                argument[j].oid.value = n;
-            }
-            qq->paramTypes[j] = argument[j].oid.value;
-            if (argument[j].value.index && (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_execute)) {
-                ngx_http_variable_value_t *value;
-                if (!(value = ngx_http_get_indexed_variable(r, argument[j].value.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); s->rc = NGX_ERROR; return; }
-                argument[j].value.str.data = value->data;
-                argument[j].value.str.len = value->len;
-            }
-            qq->paramValues[j] = (const char *)argument[j].value.str.data;
-        }
-        ngx_pq_command_t *command = query[i].commands.elts;
+    for (ngx_queue_t *q = ngx_queue_head(&d->queue), *_; q != ngx_queue_sentinel(&d->queue) && (_ = ngx_queue_next(q)); q = _) {
+        ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+        const char **paramValues = qq->paramValues;
+        int nParams = qq->nParams;
+        ngx_pq_query_t *query = qq->query;
+        Oid *paramTypes = qq->paramTypes;
+        ngx_pq_command_t *command = query->commands.elts;
         ngx_str_t sql = {0};
-        for (ngx_uint_t j = 0; j < query[i].commands.nelts; sql.len += command[j].str.len, j++) if (command[j].index) {
-            ngx_http_variable_value_t *value;
-            if (!(value = ngx_http_get_indexed_variable(r, command[j].index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); s->rc = NGX_ERROR; return; }
-            char *str = PQescapeIdentifier(s->conn, (const char *)value->data, value->len);
-            if (!str) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier(%*s)", value->len, value->data); s->rc = NGX_ERROR; return; }
+        for (ngx_uint_t j = 0; j < query->commands.nelts; sql.len += command[j].str.len, j++) if (command[j].index) {
+            char *str = PQescapeIdentifier(s->conn, (const char *)command[j].str.data, command[j].str.len);
+            if (!str) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier"); s->rc = NGX_ERROR; return; }
             ngx_str_t id = {ngx_strlen(str), NULL};
             if (!(id.data = ngx_pnalloc(r->pool, id.len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); PQfreemem(str); s->rc = NGX_ERROR; return; }
             ngx_memcpy(id.data, str, id.len);
@@ -395,19 +372,13 @@ static void ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
         }
         if (!(sql.data = ngx_pnalloc(r->pool, sql.len + 1))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); s->rc = NGX_ERROR; return; }
         u_char *p = sql.data;
-        for (ngx_uint_t j = 0; j < query[i].commands.nelts; j++) p = ngx_copy(p, command[j].str.data, command[j].str.len);
+        for (ngx_uint_t j = 0; j < query->commands.nelts; j++) p = ngx_copy(p, command[j].str.data, command[j].str.len);
         *p = '\0';
-        if (query[i].type & ngx_pq_type_query) {
-            if (!PQsendQueryParams(s->conn, (const char *)sql.data, qq->nParams, qq->paramTypes, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); s->rc = NGX_ERROR; return; }
+        if (query->type & ngx_pq_type_query) {
+            if (!PQsendQueryParams(s->conn, (const char *)sql.data, nParams, paramTypes, paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); s->rc = NGX_ERROR; return; }
         } else {
-            if (query[i].name.index) {
-                ngx_http_variable_value_t *value;
-                if (!(value = ngx_http_get_indexed_variable(r, query[i].name.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); s->rc = NGX_ERROR; return; }
-                query[i].name.str.data = value->data;
-                query[i].name.str.len = value->len;
-            }
-            if (query[i].type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query[i].name.str.data, (const char *)sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); s->rc = NGX_ERROR; return; }
-            if (query[i].type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query[i].name.str.data, qq->nParams, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); s->rc = NGX_ERROR; return; }
+            if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query->name.str.data, (const char *)sql.data, nParams, paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); s->rc = NGX_ERROR; return; }
+            if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query->name.str.data, nParams, paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); s->rc = NGX_ERROR; return; }
         }
     }
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); s->rc = NGX_ERROR; return; }
@@ -775,13 +746,64 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     c->write->log = c->log;
 }
 
+static ngx_int_t ngx_pq_queries_init(ngx_http_request_t *r, ngx_array_t *queries) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_query_t *query = queries->elts;
+    for (ngx_uint_t i = 0; i < queries->nelts; i++) {
+        ngx_pq_query_queue_t *qq;
+        if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+        ngx_queue_insert_tail(&d->queue, &qq->queue);
+        qq->query = &query[i];
+        qq->nParams = query[i].arguments.nelts;
+        ngx_pq_argument_t *argument = query[i].arguments.elts;
+        if (!(qq->paramTypes = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+        if (!(qq->paramValues = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+        for (ngx_int_t j = 0; j < qq->nParams; j++) {
+            if (argument[j].oid.index && (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_prepare)) {
+                ngx_http_variable_value_t *value;
+                if (!(value = ngx_http_get_indexed_variable(r, argument[j].oid.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+                ngx_int_t n = ngx_atoi(value->data, value->len);
+                if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_atoi == NGX_ERROR"); return NGX_ERROR; }
+                argument[j].oid.value = n;
+            }
+            qq->paramTypes[j] = argument[j].oid.value;
+            if (argument[j].value.index && (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_execute)) {
+                ngx_http_variable_value_t *value;
+                if (!(value = ngx_http_get_indexed_variable(r, argument[j].value.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+                argument[j].value.str.data = value->data;
+                argument[j].value.str.len = value->len;
+            }
+            qq->paramValues[j] = (const char *)argument[j].value.str.data;
+        }
+        ngx_pq_command_t *command = query[i].commands.elts;
+        for (ngx_uint_t j = 0; j < query[i].commands.nelts; j++) if (command[j].index) {
+            ngx_http_variable_value_t *value;
+            if (!(value = ngx_http_get_indexed_variable(r, command[j].index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+            command[j].str.data = value->data;
+            command[j].str.len = value->len;
+        }
+        if (!(query[i].type & ngx_pq_type_query) && query[i].name.index) {
+            ngx_http_variable_value_t *value;
+            if (!(value = ngx_http_get_indexed_variable(r, query[i].name.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+            query[i].name.str.data = value->data;
+            query[i].name.str.len = value->len;
+        }
+    }
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    ngx_array_t *queries = &plcf->queries;
     ngx_pq_data_t *d;
     if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
     ngx_queue_init(&d->queue);
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        if (pscf->queries.nelts) queries = &pscf->queries;
         if (pscf->peer.init(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer.init != NGX_OK"); return NGX_ERROR; }
     } else {
         if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
@@ -793,7 +815,7 @@ static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_c
     u->peer.data = d;
     u->peer.free = ngx_pq_peer_free;
     u->peer.get = ngx_pq_peer_get;
-    return NGX_OK;
+    return ngx_pq_queries_init(r, queries);
 }
 
 static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *uscf) {
