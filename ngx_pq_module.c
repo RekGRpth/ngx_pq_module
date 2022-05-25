@@ -402,6 +402,12 @@ static void ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
         if (query[i].type & ngx_pq_type_query) {
             if (!PQsendQueryParams(s->conn, (const char *)sql.data, qq->nParams, qq->paramTypes, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); s->rc = NGX_ERROR; return; }
         } else {
+            if (query[i].name.index) {
+                ngx_http_variable_value_t *value;
+                if (!(value = ngx_http_get_indexed_variable(r, query[i].name.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); s->rc = NGX_ERROR; return; }
+                query[i].name.str.data = value->data;
+                query[i].name.str.len = value->len;
+            }
             if (query[i].type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query[i].name.str.data, (const char *)sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); s->rc = NGX_ERROR; return; }
             if (query[i].type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query[i].name.str.data, qq->nParams, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); s->rc = NGX_ERROR; return; }
         }
