@@ -424,24 +424,21 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
     ngx_http_upstream_t *u = r->upstream;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     c = s->connection;
     switch (PQstatus(s->conn)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); s->rc = NGX_ERROR; return;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PQstatus == CONNECTION_OK"); goto connected;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PQstatus == CONNECTION_OK"); ngx_pq_queries(r, &plcf->queries); return;
         default: break;
     }
+    s->rc = NGX_AGAIN;
     switch (PQconnectPoll(s->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_ACTIVE"); break;
         case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); s->rc = NGX_ERROR; return;
-        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_OK"); c->read->active = 0; c->write->active = 0; goto connected;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_OK"); c->read->active = 0; c->write->active = 0; ngx_pq_queries(r, &plcf->queries); return;
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
-    s->rc = NGX_AGAIN;
-    return;
-connected:
-    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
-    ngx_pq_queries(r, &plcf->queries);
 }
 
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
