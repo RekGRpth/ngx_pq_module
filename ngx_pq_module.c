@@ -346,6 +346,9 @@ static ngx_int_t ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
     ngx_http_upstream_t *u = r->upstream;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
+    ngx_connection_t *c = s->connection;
+    if (c->read->timer_set) ngx_del_timer(c->read);
+    if (c->write->timer_set) ngx_del_timer(c->write);
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
     ngx_pq_query_t *query = queries->elts;
     for (ngx_uint_t i = 0; i < queries->nelts; i++) {
@@ -403,7 +406,6 @@ static ngx_int_t ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); return NGX_ERROR; }
     s->read_handler = ngx_pq_result_handler;
     s->write_handler = ngx_pq_result_handler;
-    ngx_connection_t *c = s->connection;
     c->read->active = 1;
     c->write->active = 0;
     return NGX_AGAIN;
@@ -438,8 +440,6 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
     s->rc = NGX_AGAIN;
     return;
 connected:
-    if (c->read->timer_set) ngx_del_timer(c->read);
-    if (c->write->timer_set) ngx_del_timer(c->write);
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     s->rc = ngx_pq_queries(r, &plcf->queries);
 }
@@ -541,8 +541,6 @@ found:
     }
     return NGX_AGAIN;
 connected:
-    if (c->read->timer_set) ngx_del_timer(c->read);
-    if (c->write->timer_set) ngx_del_timer(c->write);
     return ngx_pq_queries(r, &plcf->queries);
 declined:
     PQfinish(conn);
