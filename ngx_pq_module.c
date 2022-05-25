@@ -269,9 +269,10 @@ static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
     if (u->cleanup) (*u->cleanup)(r);
 }
 
-static ngx_int_t ngx_pq_output_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
+static ngx_int_t ngx_pq_output_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
     ngx_pq_query_t *query = d->query;
     ngx_pq_save_t *s = d->save;
     if (query->output.header) {
@@ -332,7 +333,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
             case PGRES_TUPLES_OK: {
                 if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
                 else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); }
-                if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(d);
+                if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(r);
             } break;
             default: break;
         }
