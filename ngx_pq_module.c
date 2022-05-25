@@ -500,10 +500,12 @@ found:
     values[i] = NULL;
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
-    if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto declined; }
-    if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto declined; }
+    rc = NGX_DECLINED;
+    if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
+    if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     pgsocket fd;
-    if ((fd = PQsocket(conn)) == PGINVALID_SOCKET) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket == PGINVALID_SOCKET"); goto declined; }
+    if ((fd = PQsocket(conn)) == PGINVALID_SOCKET) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket == PGINVALID_SOCKET"); goto finish; }
+    rc = NGX_ERROR;
     ngx_connection_t *c = ngx_get_connection(fd, pc->log);
     if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
     c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
@@ -539,9 +541,6 @@ found:
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
     return s->rc;
-declined:
-    PQfinish(conn);
-    return NGX_DECLINED;
 destroy:
     ngx_destroy_pool(c->pool);
     c->pool = NULL;
@@ -549,7 +548,7 @@ close:
     ngx_close_connection(c);
 finish:
     PQfinish(conn);
-    return NGX_ERROR;
+    return rc;
 }
 
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
