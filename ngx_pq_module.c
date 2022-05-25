@@ -218,7 +218,6 @@ static u_char *ngx_pq_log_error_handler(ngx_log_t *log, u_char *buf, size_t len)
     len -= p - buf;
     buf = p;
     p = ngx_snprintf(buf, len, "\n%s", original->message);
-    len -= p - buf;
     buf = p;
     return buf;
 }
