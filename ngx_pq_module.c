@@ -343,9 +343,10 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
     if (d && ngx_queue_empty(&s->query.queue)) ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
 
-static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
-    ngx_http_request_t *r = d->request;
+static ngx_int_t ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
     ngx_pq_query_t *query = queries->elts;
@@ -442,7 +443,7 @@ connected:
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
     ngx_pq_loc_conf_t *plcf = d->plcf;
-    s->rc = ngx_pq_queries(d, &plcf->queries);
+    s->rc = ngx_pq_queries(r, &plcf->queries);
 }
 
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
@@ -460,7 +461,8 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_connection_t *c = pc->connection;
         for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
         if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
-        return ngx_pq_queries(d, &plcf->queries);
+        ngx_http_request_t *r = d->request;
+        return ngx_pq_queries(r, &plcf->queries);
     }
     ngx_http_request_t *r = d->request;
     ngx_pq_srv_conf_t *pscf = d->pscf;
