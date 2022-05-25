@@ -39,6 +39,13 @@ enum {
     ngx_pq_type_upstream = 1 << 5,
 };
 
+typedef enum {
+    ngx_pq_output_type_csv = 2,
+    ngx_pq_output_type_none = 0,
+    ngx_pq_output_type_plain = 3,
+    ngx_pq_output_type_value = 1,
+} ngx_pq_output_type_t;
+
 typedef struct {
     struct {
         ngx_int_t index;
@@ -75,8 +82,8 @@ typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     ngx_flag_t header;
     ngx_flag_t string;
-    ngx_int_t (*handler) (ngx_pq_data_t *d);
     ngx_int_t index;
+    ngx_pq_output_type_t type;
     ngx_str_t null;
     u_char delimiter;
     u_char escape;
@@ -318,24 +325,6 @@ static ngx_int_t ngx_pq_output_handler(ngx_pq_data_t *d) {
     return NGX_OK;
 }
 
-static ngx_int_t ngx_pq_output_csv_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return ngx_pq_output_handler(d);
-}
-
-static ngx_int_t ngx_pq_output_plain_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return ngx_pq_output_handler(d);
-}
-
-static ngx_int_t ngx_pq_output_value_handler(ngx_pq_data_t *d) {
-    ngx_http_request_t *r = d->request;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return ngx_pq_output_handler(d);
-}
-
 static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
     ngx_pq_data_t *d = s->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
@@ -351,13 +340,13 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
             case PGRES_TUPLES_OK: {
                 if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
                 else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
-                if (s->rc == NGX_OK && query->output.handler) s->rc = query->output.handler(d);
+                if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(d);
             } break;
             default: break;
         }
         if (!(query->type & ngx_pq_type_location)) return s->rc;
         ngx_http_request_t *r = d->request;
-        if (s->rc == NGX_OK && query->output.handler && query->output.handler != ngx_pq_output_value_handler && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
+        if (s->rc == NGX_OK && query->output.type && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
     if (d && ngx_queue_empty(&d->queue)) {
         ngx_http_request_t *r = d->request;
@@ -636,29 +625,25 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
                 continue;
             }
             if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
-            static const struct {
-                ngx_str_t name;
-                ngx_int_t (*handler) (ngx_pq_data_t *d);
-            } h[] = {
-                { ngx_string("plain"), ngx_pq_output_plain_handler },
-                { ngx_string("csv"), ngx_pq_output_csv_handler },
-                { ngx_string("value"), ngx_pq_output_value_handler },
-                { ngx_null_string, NULL }
-            };
             ngx_uint_t j;
-            for (j = 0; h[j].name.len; j++) if (h[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(h[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
-            if (!h[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
-            query->output.handler = h[j].handler;
-            if (query->output.handler == ngx_pq_output_csv_handler) {
-                ngx_str_set(&query->output.null, "");
-                query->output.delimiter = ',';
-                query->output.escape = '"';
-                query->output.header = 1;
-                query->output.quote = '"';
-            } else if (query->output.handler == ngx_pq_output_plain_handler) {
-                ngx_str_set(&query->output.null, "\\N");
-                query->output.delimiter = '\t';
-                query->output.header = 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_type_csv }, { ngx_string("plain"), ngx_pq_output_type_plain }, { ngx_string("value"), ngx_pq_output_type_value }, { ngx_null_string, 0 } };
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
+            if (!e[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
+            query->output.type = e[j].value;
+            switch (query->output.type) {
+                case ngx_pq_output_type_csv: {
+                    ngx_str_set(&query->output.null, "");
+                    query->output.delimiter = ',';
+                    query->output.escape = '"';
+                    query->output.header = 1;
+                    query->output.quote = '"';
+                } break;
+                case ngx_pq_output_type_plain: {
+                    ngx_str_set(&query->output.null, "\\N");
+                    query->output.delimiter = '\t';
+                    query->output.header = 1;
+                } break;
+                default: break;
             }
             continue;
         }
