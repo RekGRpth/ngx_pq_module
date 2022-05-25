@@ -122,14 +122,13 @@ typedef struct {
 } ngx_pq_save_t;
 
 typedef struct {
+    ngx_array_t *options;
     ngx_http_request_t *request;
     ngx_int_t col;
     ngx_int_t row;
     ngx_peer_connection_t peer;
-    ngx_pq_loc_conf_t *plcf;
     ngx_pq_query_t *query;
     ngx_pq_save_t *save;
-    ngx_pq_srv_conf_t *pscf;
 } ngx_pq_data_t;
 
 typedef struct {
@@ -442,7 +441,7 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
 connected:
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
-    ngx_pq_loc_conf_t *plcf = d->plcf;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     s->rc = ngx_pq_queries(r, &plcf->queries);
 }
 
@@ -455,19 +454,18 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
     }
-    ngx_pq_loc_conf_t *plcf = d->plcf;
-    ngx_pq_save_t *s = NULL;
     ngx_http_request_t *r = d->request;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    ngx_pq_save_t *s = NULL;
     if (pc->connection) {
         ngx_connection_t *c = pc->connection;
         for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
         if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
         return ngx_pq_queries(r, &plcf->queries);
     }
-    ngx_pq_srv_conf_t *pscf = d->pscf;
-    ngx_array_t *options = pscf ? &pscf->options : &plcf->options;
     const char **keywords;
     const char **values;
+    ngx_array_t *options = d->options;
     if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     ngx_pq_option_t *option = options->elts;
@@ -746,7 +744,6 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_pq_save_t *s = d->save;
     d->save = NULL;
     if (!s) return;
-    ngx_pq_srv_conf_t *pscf = d->pscf;
     if (!ngx_queue_empty(&s->query.queue)) {
         PGcancel *cancel = PQgetCancel(s->conn);
         if (!cancel) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(s->conn), "!PQgetCancel"); return; }
@@ -755,6 +752,9 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
         PQfreeCancel(cancel);
     }
     if (pc->connection) return;
+    ngx_http_request_t *r = d->request;
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(u->upstream, ngx_pq_module);
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
@@ -775,15 +775,15 @@ static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_c
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
     ngx_pq_data_t *d;
     if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    d->options = &plcf->options;
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
         if (pscf->peer.init(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer.init != NGX_OK"); return NGX_ERROR; }
-        d->pscf = pscf;
+        d->options = &pscf->options;
     } else {
         if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
     }
-    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
-    d->plcf = plcf;
     ngx_http_upstream_t *u = r->upstream;
     d->peer = u->peer;
     d->request = r;
