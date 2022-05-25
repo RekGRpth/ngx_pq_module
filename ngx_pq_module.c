@@ -78,7 +78,6 @@ typedef struct {
     ngx_pq_connect_t connect;
 } ngx_pq_loc_conf_t;
 
-typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     ngx_flag_t header;
     ngx_flag_t string;
@@ -108,6 +107,7 @@ typedef struct {
     ngx_pq_connect_t connect;
 } ngx_pq_srv_conf_t;
 
+typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct ngx_pq_save_t ngx_pq_save_t;
 typedef struct ngx_pq_save_t {
     ngx_array_t variables;
