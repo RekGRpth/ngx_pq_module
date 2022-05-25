@@ -338,14 +338,9 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
             default: break;
         }
         if (!(query->type & ngx_pq_type_location)) return;
-        ngx_http_request_t *r = d->request;
         if (s->rc == NGX_OK && query->output.type && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
-    if (d && ngx_queue_empty(&s->query.queue)) {
-        ngx_http_request_t *r = d->request;
-        ngx_http_upstream_t *u = r->upstream;
-        ngx_pq_upstream_finalize_request(r, u, s->rc);
-    }
+    if (d && ngx_queue_empty(&s->query.queue)) ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
 
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
