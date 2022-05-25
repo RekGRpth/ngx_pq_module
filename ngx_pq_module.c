@@ -102,6 +102,11 @@ typedef struct {
 } ngx_pq_srv_conf_t;
 
 typedef struct {
+    ngx_pq_query_t *query;
+    ngx_queue_t queue;
+} ngx_pq_query_queue_t;
+
+typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_event_handler_pt read_handler;
@@ -111,12 +116,10 @@ typedef struct {
     PGconn *conn;
     PGresult *res;
     void *data;
+    struct {
+        ngx_queue_t queue;
+    } query;
 } ngx_pq_save_t;
-
-typedef struct {
-    ngx_pq_query_t *query;
-    ngx_queue_t queue;
-} ngx_pq_query_queue_t;
 
 typedef struct {
     ngx_http_request_t *request;
@@ -127,7 +130,6 @@ typedef struct {
     ngx_pq_query_t *query;
     ngx_pq_save_t *save;
     ngx_pq_srv_conf_t *pscf;
-    ngx_queue_t queue;
 } ngx_pq_data_t;
 
 typedef struct {
@@ -321,9 +323,9 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
     ngx_pq_save_t *s = d->save;
     s->rc = NGX_OK;
     if (s->res) {
-        if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "ngx_queue_empty"); s->rc = NGX_ERROR; return; }
+        if (ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "ngx_queue_empty"); s->rc = NGX_ERROR; return; }
         const char *value;
-        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_t *q = ngx_queue_head(&s->query.queue);
         ngx_queue_remove(q);
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
         ngx_pq_query_t *query = d->query = qq->query;
@@ -339,7 +341,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
         ngx_http_request_t *r = d->request;
         if (s->rc == NGX_OK && query->output.type && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
-    if (d && ngx_queue_empty(&d->queue)) {
+    if (d && ngx_queue_empty(&s->query.queue)) {
         ngx_http_request_t *r = d->request;
         ngx_http_upstream_t *u = r->upstream;
         ngx_pq_upstream_finalize_request(r, u, s->rc);
@@ -401,7 +403,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
         }
         ngx_pq_query_queue_t *qq;
         if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-        ngx_queue_insert_tail(&d->queue, &qq->queue);
+        ngx_queue_insert_tail(&s->query.queue, &qq->queue);
         qq->query = &query[i];
     }
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); return NGX_ERROR; }
@@ -534,6 +536,7 @@ found:
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+    ngx_queue_init(&s->query.queue);
     ngx_pool_cleanup_t *cln;
     if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
     cln->data = s;
@@ -748,7 +751,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     d->save = NULL;
     if (!s) return;
     ngx_pq_srv_conf_t *pscf = d->pscf;
-    if (!ngx_queue_empty(&d->queue)) {
+    if (!ngx_queue_empty(&s->query.queue)) {
         PGcancel *cancel = PQgetCancel(s->conn);
         if (!cancel) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(s->conn), "!PQgetCancel"); return; }
         char errbuf[256];
@@ -783,7 +786,6 @@ static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_c
     } else {
         if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
     }
-    ngx_queue_init(&d->queue);
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     d->plcf = plcf;
     ngx_http_upstream_t *u = r->upstream;
