@@ -465,7 +465,8 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     const char **keywords;
     const char **values;
     ngx_http_upstream_t *u = r->upstream;
-    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(u->upstream, ngx_pq_module);
+    ngx_http_upstream_srv_conf_t *uscf = u->upstream;
+    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
     ngx_array_t *options = pscf ? &pscf->options : &plcf->options;
     if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
@@ -755,7 +756,8 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     if (pc->connection) return;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
-    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(u->upstream, ngx_pq_module);
+    ngx_http_upstream_srv_conf_t *uscf = u->upstream;
+    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
