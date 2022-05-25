@@ -371,9 +371,9 @@ static void ngx_pq_queries(ngx_http_request_t *r, ngx_array_t *queries) {
             command[j].str = id;
         }
         if (!(sql.data = ngx_pnalloc(r->pool, sql.len + 1))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); s->rc = NGX_ERROR; return; }
-        u_char *p = sql.data;
-        for (ngx_uint_t j = 0; j < query->commands.nelts; j++) p = ngx_copy(p, command[j].str.data, command[j].str.len);
-        *p = '\0';
+        u_char *i = sql.data;
+        for (ngx_uint_t j = 0; j < query->commands.nelts; j++) i = ngx_copy(i, command[j].str.data, command[j].str.len);
+        *i = '\0';
         if (query->type & ngx_pq_type_query) {
             if (!PQsendQueryParams(s->conn, (const char *)sql.data, nParams, paramTypes, paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); s->rc = NGX_ERROR; return; }
         } else {
