@@ -108,22 +108,17 @@ typedef struct {
 } ngx_pq_srv_conf_t;
 
 typedef struct ngx_pq_data_t ngx_pq_data_t;
-typedef struct ngx_pq_save_t ngx_pq_save_t;
-typedef struct ngx_pq_save_t {
+typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
+    ngx_event_handler_pt read_handler;
+    ngx_event_handler_pt write_handler;
     ngx_int_t rc;
-    ngx_int_t (*read_handler) (ngx_pq_save_t *s);
-    ngx_int_t (*write_handler) (ngx_pq_save_t *s);
     ngx_msec_t timeout;
     ngx_pq_data_t *data;
-    struct {
-        ngx_event_handler_pt read_handler;
-        ngx_event_handler_pt write_handler;
-        void *data;
-    } keep;
     PGconn *conn;
     PGresult *res;
+    void *keep;
 } ngx_pq_save_t;
 
 typedef struct {
@@ -325,12 +320,16 @@ static ngx_int_t ngx_pq_output_handler(ngx_pq_data_t *d) {
     return NGX_OK;
 }
 
-static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
-    ngx_pq_data_t *d = s->data;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
+static void ngx_pq_result_handler(ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+    ngx_connection_t *c = ev->data;
+    ngx_http_request_t *r = c->data;
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
     s->rc = NGX_OK;
     if (s->res) {
-        if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); s->rc = NGX_ERROR; return s->rc; }
+        if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "ngx_queue_empty"); s->rc = NGX_ERROR; return; }
         const char *value;
         ngx_queue_t *q = ngx_queue_head(&d->queue);
         ngx_queue_remove(q);
@@ -338,13 +337,13 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
         ngx_pq_query_t *query = d->query = qq->query;
         switch (PQresultStatus(s->res)) {
             case PGRES_TUPLES_OK: {
-                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
-                else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, PQresStatus(PQresultStatus(s->res))); }
+                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+                else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); }
                 if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(d);
             } break;
             default: break;
         }
-        if (!(query->type & ngx_pq_type_location)) return s->rc;
+        if (!(query->type & ngx_pq_type_location)) return;
         ngx_http_request_t *r = d->request;
         if (s->rc == NGX_OK && query->output.type && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
     }
@@ -353,7 +352,6 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s) {
         ngx_http_upstream_t *u = r->upstream;
         ngx_pq_upstream_finalize_request(r, u, s->rc);
     }
-    return s->rc;
 }
 
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
@@ -416,7 +414,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_array_t *queries) {
     }
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); return NGX_ERROR; }
     s->read_handler = ngx_pq_result_handler;
-    s->write_handler = NULL;
+    s->write_handler = ngx_pq_result_handler;
     ngx_connection_t *c = s->connection;
     c->read->active = 1;
     c->write->active = 0;
@@ -429,28 +427,33 @@ static void ngx_pq_save_cln_handler(void *data) {
     PQfinish(s->conn);
 }
 
-static ngx_int_t ngx_pq_connect_handler(ngx_pq_save_t *s) {
-    ngx_connection_t *c = s->connection;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
+static void ngx_pq_connect_handler(ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+    ngx_connection_t *c = ev->data;
+    ngx_http_request_t *r = c->data;
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    c = s->connection;
     switch (PQstatus(s->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); return NGX_ERROR;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQstatus == CONNECTION_OK"); goto connected;
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); s->rc = NGX_ERROR; return;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PQstatus == CONNECTION_OK"); goto connected;
         default: break;
     }
     switch (PQconnectPoll(s->conn)) {
-        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); break;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
-        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); c->read->active = 0; c->write->active = 1; break;
-        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
-        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_ACTIVE"); break;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); s->rc = NGX_ERROR; return;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_OK"); c->read->active = 0; c->write->active = 1; break;
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
-    return NGX_AGAIN;
+    s->rc = NGX_AGAIN;
+    return;
 connected:
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
-    ngx_pq_data_t *d = s->data;
     ngx_pq_loc_conf_t *plcf = d->plcf;
-    return ngx_pq_queries(d, &plcf->queries);
+    s->rc = ngx_pq_queries(d, &plcf->queries);
 }
 
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
@@ -739,8 +742,8 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_pq_save_t *s = c->data;
 //    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && ngx_pq_process(s) == NGX_OK) { ngx_add_timer(c->read, s->timeout); return; }
-    c->data = s->keep.data;
-    s->keep.read_handler(ev);
+    c->data = s->keep;
+    s->read_handler(ev);
 }
 
 static void ngx_pq_write_handler(ngx_event_t *ev) {
@@ -767,9 +770,9 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
-    s->keep.data = c->data;
-    s->keep.read_handler = c->read->handler;
-    s->keep.write_handler = c->write->handler;
+    s->keep = c->data;
+    s->read_handler = c->read->handler;
+    s->write_handler = c->write->handler;
     c->data = s;
     c->read->handler = ngx_pq_read_handler;
     c->write->handler = ngx_pq_write_handler;
@@ -878,6 +881,7 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
+    ngx_connection_t *c = s->connection;
     if (PQstatus(s->conn) == CONNECTION_OK && !PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->rc = NGX_OK;
     const char *value;
@@ -894,14 +898,14 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
             case PGRES_PIPELINE_SYNC: goto done;
             default: break;
         }
-        if (s->rc == NGX_OK && s->read_handler) s->rc = s->read_handler(s);
+        if (s->rc == NGX_OK) s->read_handler(c->read);
         PQclear(s->res);
     }
 done:
     if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQgetResult"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->res = NULL;
-    if (s->rc == NGX_OK && s->read_handler) s->rc = s->read_handler(s);
+    if (s->rc == NGX_OK) s->read_handler(c->read);
     switch (s->rc) {
         case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
     }
@@ -911,8 +915,9 @@ static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
+    ngx_connection_t *c = s->connection;
     s->rc = NGX_OK;
-    if (s->rc == NGX_OK && s->write_handler) s->rc = s->write_handler(s);
+    if (s->rc == NGX_OK) s->write_handler(c->write);
     switch (s->rc) {
         case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
     }
