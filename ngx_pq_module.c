@@ -107,7 +107,6 @@ typedef struct {
     ngx_pq_connect_t connect;
 } ngx_pq_srv_conf_t;
 
-typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
@@ -115,7 +114,6 @@ typedef struct {
     ngx_event_handler_pt write_handler;
     ngx_int_t rc;
     ngx_msec_t timeout;
-    ngx_pq_data_t *data;
     PGconn *conn;
     PGresult *res;
     void *keep;
@@ -126,7 +124,7 @@ typedef struct {
     ngx_queue_t queue;
 } ngx_pq_query_queue_t;
 
-typedef struct ngx_pq_data_t {
+typedef struct {
     ngx_http_request_t *request;
     ngx_int_t col;
     ngx_int_t row;
@@ -471,7 +469,6 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_connection_t *c = pc->connection;
         for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
         if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
-        s->data = d;
         return ngx_pq_queries(d, &plcf->queries);
     }
     ngx_http_request_t *r = d->request;
@@ -552,7 +549,6 @@ found:
     s->read_handler = ngx_pq_connect_handler;
     s->write_handler = ngx_pq_connect_handler;
     pc->connection = c;
-    s->data = d;
     return NGX_AGAIN;
 declined:
     PQfinish(conn);
@@ -757,7 +753,6 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_pq_save_t *s = d->save;
     d->save = NULL;
     if (!s) return;
-    s->data = NULL;
     ngx_pq_srv_conf_t *pscf = d->pscf;
     if (!ngx_queue_empty(&d->queue)) {
         PGcancel *cancel = PQgetCancel(s->conn);
