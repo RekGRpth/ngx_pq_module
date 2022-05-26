@@ -342,21 +342,22 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
     s->rc = NGX_OK;
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(s->res = PQgetResult(s->conn))) continue;
-        if (PQresultStatus(s->res) != PGRES_FATAL_ERROR) {
-            if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
-            else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); }
-        }
-        ngx_queue_t *q = ngx_queue_head(&d->queue);
-        ngx_queue_remove(q);
-        ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-        ngx_pq_query_t *query = d->query = qq->query;
         switch (PQresultStatus(s->res)) {
             case PGRES_FATAL_ERROR: {
                 if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
                 else { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
                 s->rc = NGX_ERROR;
             } break;
-            case PGRES_PIPELINE_SYNC: PQclear(s->res); goto done;
+            case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); PQclear(s->res); goto done;
+            default: break;
+        }
+        if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+        else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); }
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+        ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+        ngx_pq_query_t *query = d->query = qq->query;
+        switch (PQresultStatus(s->res)) {
             case PGRES_TUPLES_OK: if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(r); break;
             default: break;
         }
