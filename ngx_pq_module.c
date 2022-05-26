@@ -347,6 +347,17 @@ static ngx_int_t ngx_pq_copy_handler(ngx_http_request_t *r) {
     return rc;
 }
 
+static ngx_int_t ngx_pq_error_handler(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    const char *value;
+    if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+    else { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
+    return NGX_HTTP_BAD_GATEWAY;
+}
+
 static void ngx_pq_result_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
     ngx_connection_t *c = ev->data;
@@ -364,12 +375,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
         switch (PQresultStatus(s->res)) {
             case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_COMMAND_OK"); ngx_queue_remove(q); break;
             case PGRES_COPY_OUT: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_COPY_OUT"); if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_copy_handler(r); break;
-            case PGRES_FATAL_ERROR: {
-                const char *value;
-                if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
-                else { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
-                s->rc = NGX_HTTP_BAD_GATEWAY;
-            } break;
+            case PGRES_FATAL_ERROR: s->rc = ngx_pq_error_handler(r); break;
             case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
             case PGRES_TUPLES_OK: ngx_queue_remove(q); if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_tuple_handler(r); break;
             default: ngx_log_error(NGX_LOG_ERR, ev->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); s->rc = NGX_HTTP_BAD_GATEWAY; break;
