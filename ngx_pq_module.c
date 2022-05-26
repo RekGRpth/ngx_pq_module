@@ -378,7 +378,7 @@ static ngx_int_t ngx_pq_queries_send(ngx_pq_data_t *d) {
     c->write->active = 0;
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
-    ngx_int_t rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    ngx_int_t rc = NGX_HTTP_BAD_GATEWAY;
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); goto ret; }
     char *str;
     PQExpBufferData name;
