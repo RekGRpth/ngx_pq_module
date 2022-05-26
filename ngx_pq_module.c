@@ -346,7 +346,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
             case PGRES_FATAL_ERROR: {
                 if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
                 else { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
-                s->rc = NGX_ERROR;
+                s->rc = NGX_HTTP_BAD_GATEWAY;
             } break;
             case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); PQclear(s->res); goto done;
             default: break;
@@ -911,9 +911,8 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "s->rc = %i", s->rc);
-    switch (s->rc) {
-        case NGX_ERROR: s->rc = ngx_http_filter_finalize_request(r, NULL, NGX_HTTP_INTERNAL_SERVER_ERROR); return;
-    }
+    if (s->rc == NGX_ERROR) { (void)ngx_http_filter_finalize_request(r, NULL, NGX_HTTP_INTERNAL_SERVER_ERROR); return; }
+    if (s->rc >= NGX_HTTP_SPECIAL_RESPONSE) { (void)ngx_http_filter_finalize_request(r, NULL, s->rc); return; }
     if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
