@@ -353,11 +353,22 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
         if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
         else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, PQresStatus(PQresultStatus(s->res))); }
         ngx_queue_t *q = ngx_queue_head(&d->queue);
-        ngx_queue_remove(q);
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
         ngx_pq_query_t *query = d->query = qq->query;
         switch (PQresultStatus(s->res)) {
-            case PGRES_TUPLES_OK: if (s->rc == NGX_OK && query->output.type) if (ngx_pq_output_handler(r) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
+            case PGRES_COMMAND_OK: ngx_queue_remove(q); break;
+            case PGRES_COPY_OUT: if (s->rc == NGX_OK && query->output.type) {
+                char *buffer = NULL;
+                int len;
+                switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
+                    case 0: break;
+                    case -1: break;
+                    case -2: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PQgetCopyData == -2"); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); if (buffer) PQfreemem(buffer); return;
+                    default: d->row++; if (ngx_pq_output(r, len, (const u_char *)buffer) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
+                }
+                if (buffer) PQfreemem(buffer);
+            } break;
+            case PGRES_TUPLES_OK: ngx_queue_remove(q); if (s->rc == NGX_OK && query->output.type) if (ngx_pq_output_handler(r) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
             default: ngx_log_error(NGX_LOG_ERR, ev->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); return;
         }
         if (s->rc == NGX_OK && query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
