@@ -490,7 +490,9 @@ found:
     values[i] = (const char *)p + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
     i++;
     keywords[i] = "port";
+    values[i] = NULL;
     for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (const char *)&p[j + 1]; break; }
+    if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); return NGX_ERROR; }
     i++;
     keywords[i] = NULL;
     values[i] = NULL;
