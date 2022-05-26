@@ -458,9 +458,12 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_http_request_t *r = d->request;
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_t *u = r->upstream;
-    ngx_http_upstream_srv_conf_t *uscf = u->upstream;
-    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
-    ngx_array_t *options = pscf ? &pscf->options : &plcf->options;
+    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+    ngx_array_t *options = &plcf->options;
+    if (uscf->srv_conf) {
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        options = &pscf->options;
+    }
     if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
     ngx_pq_option_t *option = options->elts;
@@ -471,8 +474,6 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     }
     if (pc->sockaddr->sa_family != AF_UNIX) {
         keywords[i] = "host";
-        ngx_http_upstream_t *u = r->upstream;
-        ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
         ngx_http_upstream_server_t *us = uscf->servers->elts;
         ngx_str_t host = uscf->host;
         for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
@@ -763,7 +764,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     if (pc->connection) return;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
-    ngx_http_upstream_srv_conf_t *uscf = u->upstream;
+    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
     ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
