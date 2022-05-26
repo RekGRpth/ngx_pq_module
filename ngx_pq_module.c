@@ -624,7 +624,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
                 name.len -= sizeof("output=") - 1 + 1;
                 ngx_http_variable_t *variable;
                 if (!(variable = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_CHANGEABLE))) return "!ngx_http_add_variable";
-                if ((query->output.index = ngx_http_get_variable_index(cf, &name)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+                if ((query->output.index = ngx_http_get_variable_index(cf, &name)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
                 variable->get_handler = ngx_pq_variable_get_handler;
                 variable->data = query->output.index;
                 continue;
@@ -692,14 +692,14 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
             if (value.data[0] == '$') {
                 value.data++;
                 value.len--;
-                if ((argument->value.index = ngx_http_get_variable_index(cf, &value)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+                if ((argument->value.index = ngx_http_get_variable_index(cf, &value)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
             } else argument->value.str = value;
         }
         if (!oid.len) continue;
         if (oid.data[0] == '$') {
             oid.data++;
             oid.len--;
-            if ((argument->oid.index = ngx_http_get_variable_index(cf, &oid)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+            if ((argument->oid.index = ngx_http_get_variable_index(cf, &oid)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
         } else {
             ngx_int_t n = ngx_atoi(oid.data, oid.len);
             if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
@@ -718,7 +718,7 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     if (str[1].data[0] == '$') {
         str[1].data++;
         str[1].len--;
-        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
     } else query->name.str = str[1];
     query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, cmd, query);
@@ -1057,7 +1057,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
         if (str[i].data[0] == '$') {
             str[i].data++;
             str[i].len--;
-            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
         } else query->name.str = str[i];
         i++;
     }
@@ -1079,7 +1079,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
                 command->str.data = n;
                 command->str.len = s - n;
                 n = s;
-                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
+                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
             } else {
                 if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
                 ngx_memzero(command, sizeof(*command));
