@@ -3,14 +3,6 @@
 
 #define DEF_PGPORT 5432
 
-#ifndef WIN32
-typedef int pgsocket;
-#define PGINVALID_SOCKET (-1)
-#else
-typedef SOCKET pgsocket;
-#define PGINVALID_SOCKET INVALID_SOCKET
-#endif
-
 #define PQExpBufferDataBroken(buf) ((buf).maxlen == 0)
 
 typedef struct PQExpBufferData {
@@ -576,8 +568,8 @@ found:
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
-    pgsocket fd;
-    if ((fd = PQsocket(conn)) == PGINVALID_SOCKET) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket == PGINVALID_SOCKET"); goto finish; }
+    int fd;
+    if ((fd = PQsocket(conn)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket < 0"); goto finish; }
     rc = NGX_ERROR;
     ngx_connection_t *c = ngx_get_connection(fd, pc->log);
     if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
