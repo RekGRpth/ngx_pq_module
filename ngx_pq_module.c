@@ -337,7 +337,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
     ngx_http_upstream_t *u = r->upstream;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
-    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); return; }
     const char *value;
     s->rc = NGX_OK;
     while (PQstatus(s->conn) == CONNECTION_OK) {
@@ -358,15 +358,15 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
         ngx_pq_query_t *query = d->query = qq->query;
         switch (PQresultStatus(s->res)) {
-            case PGRES_TUPLES_OK: if (s->rc == NGX_OK && query->output.type) s->rc = ngx_pq_output_handler(r); break;
+            case PGRES_TUPLES_OK: if (s->rc == NGX_OK && query->output.type) if (ngx_pq_output_handler(r) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
             default: break;
         }
-        if (s->rc == NGX_OK && query->output.type && !d->row) s->rc = ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res));
+        if (s->rc == NGX_OK && query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
         PQclear(s->res);
     }
 done:
-    if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "PQgetResult"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
-    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
+    if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "PQgetResult"); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); return; }
+    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); return; }
     ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
 
@@ -378,13 +378,13 @@ static ngx_int_t ngx_pq_queries_send(ngx_pq_data_t *d) {
     c->write->active = 0;
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
-    if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
+    ngx_int_t rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); goto ret; }
     char *str;
     PQExpBufferData name;
     PQExpBufferData sql;
     initPQExpBuffer(&name);
     initPQExpBuffer(&sql);
-    ngx_int_t rc = NGX_ERROR;
     for (ngx_queue_t *q = ngx_queue_head(&d->queue), *_; q != ngx_queue_sentinel(&d->queue) && (_ = ngx_queue_next(q)); q = _) {
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
         ngx_pq_query_t *query = qq->query;
@@ -417,6 +417,7 @@ static ngx_int_t ngx_pq_queries_send(ngx_pq_data_t *d) {
 term:
     termPQExpBuffer(&name);
     termPQExpBuffer(&sql);
+ret:
     return rc;
 }
 
@@ -434,7 +435,7 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     switch (PQstatus(s->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); s->rc = NGX_ERROR; return;
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PQstatus == CONNECTION_BAD"); s->rc = NGX_HTTP_BAD_GATEWAY; return;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PQstatus == CONNECTION_OK"); s->rc = ngx_pq_queries_send(d); return;
         default: break;
     }
@@ -442,7 +443,7 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
     s->rc = NGX_AGAIN;
     switch (PQconnectPoll(s->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_ACTIVE"); break;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); s->rc = NGX_ERROR; return;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); s->rc = NGX_HTTP_BAD_GATEWAY; return;
         case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_OK"); s->rc = ngx_pq_queries_send(d); return;
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
@@ -910,7 +911,6 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "s->rc = %i", s->rc);
-    if (s->rc == NGX_ERROR) { (void)ngx_http_filter_finalize_request(r, NULL, NGX_HTTP_INTERNAL_SERVER_ERROR); return; }
     if (s->rc >= NGX_HTTP_SPECIAL_RESPONSE) { (void)ngx_http_filter_finalize_request(r, NULL, s->rc); return; }
     if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
     rc = ngx_http_send_header(r);
