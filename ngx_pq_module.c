@@ -465,8 +465,8 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         options = &pscf->options;
     }
     ngx_int_t rc = NGX_ERROR;
-    if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); goto ret; }
-    if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); goto ret; }
+    if (!(keywords = ngx_pcalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
+    if (!(values = ngx_pcalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
     ngx_pq_option_t *option = options->elts;
     ngx_uint_t i;
     for (i = 0; i < options->nelts; i++) {
@@ -491,13 +491,10 @@ found:
     values[i] = (const char *)p + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
     i++;
     keywords[i] = "port";
-    values[i] = NULL;
     for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (const char *)&p[j + 1]; break; }
     rc = NGX_DECLINED;
     if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); goto ret; }
     i++;
-    keywords[i] = NULL;
-    values[i] = NULL;
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
