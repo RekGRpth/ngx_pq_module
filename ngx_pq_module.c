@@ -369,7 +369,9 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
     if (c->write->timer_set) ngx_del_timer(c->write);
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
     char *str;
+    PQExpBufferData name;
     PQExpBufferData sql;
+    initPQExpBuffer(&name);
     initPQExpBuffer(&sql);
     ngx_int_t rc = NGX_ERROR;
     for (ngx_queue_t *q = ngx_queue_head(&d->queue), *_; q != ngx_queue_sentinel(&d->queue) && (_ = ngx_queue_next(q)); q = _) {
@@ -388,8 +390,11 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
         if (query->type & ngx_pq_type_query) {
             if (!PQsendQueryParams(s->conn, sql.data, qq->nParams, qq->paramTypes, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); goto term; }
         } else {
-            if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query->name.str.data, sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); goto term; }
-            if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query->name.str.data, qq->nParams, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); goto term; }
+            resetPQExpBuffer(&name);
+            appendBinaryPQExpBuffer(&name, (const char *)query->name.str.data, query->name.str.len);
+            if (PQExpBufferDataBroken(name)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); goto term; }
+            if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, name.data, sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); goto term; }
+            if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, name.data, qq->nParams, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); goto term; }
         }
     }
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); goto term; }
@@ -399,6 +404,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
     c->write->active = 0;
     rc = NGX_AGAIN;
 term:
+    termPQExpBuffer(&name);
     termPQExpBuffer(&sql);
     return rc;
 }
