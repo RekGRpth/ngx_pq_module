@@ -771,6 +771,7 @@ static ngx_int_t ngx_pq_queries_init(ngx_http_request_t *r, ngx_array_t *queries
         qq->query = &query[i];
         qq->nParams = query[i].arguments.nelts;
         ngx_pq_argument_t *argument = query[i].arguments.elts;
+        if (!(qq->paramLengths = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramLengths)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         if (!(qq->paramTypes = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         if (!(qq->paramValues = ngx_pnalloc(r->pool, qq->nParams * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
         for (ngx_int_t j = 0; j < qq->nParams; j++) {
@@ -788,6 +789,7 @@ static ngx_int_t ngx_pq_queries_init(ngx_http_request_t *r, ngx_array_t *queries
                 argument[j].value.str.data = value->data;
                 argument[j].value.str.len = value->len;
             }
+            qq->paramLengths[j] = argument[j].value.str.len;
             qq->paramValues[j] = (const char *)argument[j].value.str.data;
         }
         ngx_pq_command_t *command = query[i].commands.elts;
