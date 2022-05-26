@@ -547,8 +547,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_connection_t *c = pc->connection;
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
     if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
-    s->rc = ngx_pq_queries_send(d);
-    return s->rc;
+    return ngx_pq_queries_send(d);
 }
 
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
