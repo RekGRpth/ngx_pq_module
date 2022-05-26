@@ -453,6 +453,7 @@ done:
         ngx_array_t *queries = &plcf->queries;
         if (ngx_pq_queries_init(r, queries) != NGX_OK) return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_INTERNAL_SERVER_ERROR);
         if ((s->rc = ngx_pq_queries_send(d)) != NGX_AGAIN) return ngx_pq_upstream_finalize_request(r, u, s->rc);
+        return;
     }
     ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
