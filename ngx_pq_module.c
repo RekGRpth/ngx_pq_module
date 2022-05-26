@@ -358,7 +358,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
         ngx_pq_query_t *query = d->query = qq->query;
         switch (PQresultStatus(s->res)) {
             case PGRES_TUPLES_OK: if (s->rc == NGX_OK && query->output.type) if (ngx_pq_output_handler(r) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
-            default: break;
+            default: ngx_log_error(NGX_LOG_ERR, ev->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); return;
         }
         if (s->rc == NGX_OK && query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
         PQclear(s->res);
