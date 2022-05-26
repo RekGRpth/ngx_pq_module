@@ -379,26 +379,26 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
         resetPQExpBuffer(&sql);
         for (ngx_uint_t j = 0; j < query->commands.nelts; j++) {
             if (command[j].index) {
-                if (!(str = PQescapeIdentifier(s->conn, (const char *)command[j].str.data, command[j].str.len))) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier"); goto sql; }
+                if (!(str = PQescapeIdentifier(s->conn, (const char *)command[j].str.data, command[j].str.len))) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier"); goto term; }
                 appendPQExpBufferStr(&sql, str);
                 PQfreemem(str);
             } else appendBinaryPQExpBuffer(&sql, (const char *)command[j].str.data, command[j].str.len);
-            if (PQExpBufferDataBroken(sql)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); goto sql; }
+            if (PQExpBufferDataBroken(sql)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); goto term; }
         }
         if (query->type & ngx_pq_type_query) {
-            if (!PQsendQueryParams(s->conn, sql.data, qq->nParams, qq->paramTypes, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); goto sql; }
+            if (!PQsendQueryParams(s->conn, sql.data, qq->nParams, qq->paramTypes, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); goto term; }
         } else {
-            if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query->name.str.data, sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); goto sql; }
-            if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query->name.str.data, qq->nParams, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); goto sql; }
+            if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query->name.str.data, sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); goto term; }
+            if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query->name.str.data, qq->nParams, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); goto term; }
         }
     }
-    if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); goto sql; }
+    if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); goto term; }
     s->read_handler = ngx_pq_result_handler;
     s->write_handler = ngx_pq_result_handler;
     c->read->active = 1;
     c->write->active = 0;
     rc = NGX_AGAIN;
-sql:
+term:
     termPQExpBuffer(&sql);
     return rc;
 }
