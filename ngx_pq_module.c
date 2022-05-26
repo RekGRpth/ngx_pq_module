@@ -674,23 +674,23 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
 
 static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_pq_query_t *query) {
     ngx_str_t *str = cf->args->elts;
-    for (ngx_uint_t i = cmd->offset & ngx_pq_type_prepare ? 3 : 2; i < cf->args->nelts; i++) {
+    for (ngx_uint_t i = query->type & ngx_pq_type_prepare ? 3 : 2; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("delimiter=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"delimiter=", sizeof("delimiter=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(str[i].len - (sizeof("delimiter=") - 1))) return "empty \"delimiter\" value";
             if (str[i].len - (sizeof("delimiter=") - 1) > 1) return "\"delimiter\" value must be one character";
             query->output.delimiter = str[i].data[sizeof("delimiter=") - 1];
             continue;
         }
         if (str[i].len >= sizeof("escape=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"escape=", sizeof("escape=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(str[i].len - (sizeof("escape=") - 1))) { query->output.escape = '\0'; continue; }
             else if (str[i].len > 1) return "\"escape\" value must be one character";
             query->output.escape = str[i].data[sizeof("escape=") - 1];
             continue;
         }
         if (str[i].len > sizeof("header=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"header=", sizeof("header=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("off"), 0 }, { ngx_string("no"), 0 }, { ngx_string("false"), 0 }, { ngx_string("on"), 1 }, { ngx_string("yes"), 1 }, { ngx_string("true"), 1 }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("header=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("header=") - 1], str[i].len - (sizeof("header=") - 1))) break;
@@ -699,7 +699,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
             continue;
         }
         if (str[i].len > sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
-            if (str[i].data[sizeof("output=") - 1] == '$' && cmd->offset & ngx_pq_type_upstream) {
+            if (str[i].data[sizeof("output=") - 1] == '$' && query->type & ngx_pq_type_upstream) {
                 ngx_str_t name = str[i];
                 name.data += sizeof("output=") - 1 + 1;
                 name.len -= sizeof("output=") - 1 + 1;
@@ -710,7 +710,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
                 variable->data = query->output.index;
                 continue;
             }
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_csv }, { ngx_string("plain"), ngx_pq_output_plain }, { ngx_string("value"), ngx_pq_output_value }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
@@ -734,20 +734,20 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
             continue;
         }
         if (str[i].len > sizeof("null=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"null=", sizeof("null=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(query->output.null.len = str[i].len - (sizeof("null=") - 1))) return "empty \"null\" value";
             query->output.null.data = &str[i].data[sizeof("null=") - 1];
             continue;
         }
         if (str[i].len >= sizeof("quote=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"quote=", sizeof("quote=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(str[i].len - (sizeof("quote=") - 1))) { query->output.quote = '\0'; continue; }
             else if (str[i].len - (sizeof("quote=") - 1) > 1) return "\"quote\" value must be one character";
             query->output.quote = str[i].data[sizeof("quote=") - 1];
             continue;
         }
         if (str[i].len > sizeof("string=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"string=", sizeof("string=") - 1)) {
-            if (!(cmd->offset & ngx_pq_type_output)) return "output not allowed";
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("off"), 0 }, { ngx_string("no"), 0 }, { ngx_string("false"), 0 }, { ngx_string("on"), 1 }, { ngx_string("yes"), 1 }, { ngx_string("true"), 1 }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("string=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("string=") - 1], str[i].len - (sizeof("string=") - 1))) break;
@@ -761,15 +761,15 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
         ngx_memzero(argument, sizeof(*argument));
         ngx_str_t value = str[i];
         ngx_str_t oid = ngx_null_string;
-        if (cmd->offset & ngx_pq_type_query) {
+        if (query->type & ngx_pq_type_query) {
             u_char *colon;
             if ((colon = ngx_strstrn(value.data, "::", sizeof("::") - 1 - 1))) {
                 value.len = colon - value.data;
                 oid.data = colon + sizeof("::") - 1;
                 oid.len = str[i].len - value.len - sizeof("::") + 1;
             }
-        } else if (cmd->offset & ngx_pq_type_prepare) oid = value;
-        if (!(cmd->offset & ngx_pq_type_prepare)) {
+        } else if (query->type & ngx_pq_type_prepare) oid = value;
+        if (!(query->type & ngx_pq_type_prepare)) {
             if (value.data[0] == '$') {
                 value.data++;
                 value.len--;
@@ -1084,7 +1084,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
     ngx_str_t *str = cf->args->elts;
     ngx_uint_t i = 1;
     query->type = cmd->offset;
-    if (cmd->offset & ngx_pq_type_prepare) {
+    if (query->type & ngx_pq_type_prepare) {
         if (str[i].data[0] == '$') {
             str[i].data++;
             str[i].len--;
