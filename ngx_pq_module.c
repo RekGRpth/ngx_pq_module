@@ -672,7 +672,7 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     return NGX_OK;
 }
 
-static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_pq_query_t *query) {
+static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *query) {
     ngx_str_t *str = cf->args->elts;
     for (ngx_uint_t i = query->type & ngx_pq_type_prepare ? 3 : 2; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("delimiter=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"delimiter=", sizeof("delimiter=") - 1)) {
@@ -802,7 +802,7 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
         if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
     } else query->name.str = str[1];
     query->type = cmd->offset;
-    return ngx_pq_argument_output_loc_conf(cf, cmd, query);
+    return ngx_pq_argument_output_loc_conf(cf, query);
 }
 
 static char *ngx_pq_execute_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -1126,7 +1126,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
         command->str.data = n;
         command->str.len = s - n;
     }
-    return ngx_pq_argument_output_loc_conf(cf, cmd, query);
+    return ngx_pq_argument_output_loc_conf(cf, query);
 }
 
 static char *ngx_pq_prepare_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
