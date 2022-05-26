@@ -292,38 +292,38 @@ static ngx_int_t ngx_pq_output_handler(ngx_http_request_t *r) {
     ngx_pq_query_t *query = d->query;
     ngx_pq_save_t *s = d->save;
     if (query->output.header) {
-        if (d->row > 0) if (ngx_pq_output(r, sizeof("\n") - 1, (const u_char *)"\n") == NGX_ERROR) return NGX_ERROR;
+        if (d->row > 0) if (ngx_pq_output(r, sizeof("\n") - 1, (const u_char *)"\n") != NGX_OK) return NGX_ERROR;
         for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-            if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
-            if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+            if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) != NGX_OK) return NGX_ERROR;
+            if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) != NGX_OK) return NGX_ERROR;
             const u_char *data = (const u_char *)PQfname(s->res, d->col);
             ngx_uint_t len = ngx_strlen(data);
             if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
-                if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
-                if (ngx_pq_output(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
+                if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) != NGX_OK) return NGX_ERROR;
+                if (ngx_pq_output(r, sizeof(data[k]), &data[k]) != NGX_OK) return NGX_ERROR;
             } else {
-                if (ngx_pq_output(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
+                if (ngx_pq_output(r, len, (const u_char *)data) != NGX_OK) return NGX_ERROR;
             }
-            if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+            if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) != NGX_OK) return NGX_ERROR;
         }
     }
     for (d->row = 0; d->row < PQntuples(s->res); d->row++) {
-        if (d->row > 0 || query->output.header) if (ngx_pq_output(r, sizeof("\n") - 1, (const u_char *)"\n") == NGX_ERROR) return NGX_ERROR;
+        if (d->row > 0 || query->output.header) if (ngx_pq_output(r, sizeof("\n") - 1, (const u_char *)"\n") != NGX_OK) return NGX_ERROR;
         for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-            if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) == NGX_ERROR) return NGX_ERROR;
+            if (d->col > 0) if (ngx_pq_output(r, sizeof(query->output.delimiter), &query->output.delimiter) != NGX_OK) return NGX_ERROR;
             if (PQgetisnull(s->res, d->row, d->col)) {
-                if (query->output.null.len) if (ngx_pq_output(r, query->output.null.len, query->output.null.data) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.null.len) if (ngx_pq_output(r, query->output.null.len, query->output.null.data) != NGX_OK) return NGX_ERROR;
             } else {
-                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) != NGX_OK) return NGX_ERROR;
                 const u_char *data = (const u_char *)PQgetvalue(s->res, d->row, d->col);
                 ngx_uint_t len = PQgetlength(s->res, d->row, d->col);
                 if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
-                    if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) == NGX_ERROR) return NGX_ERROR;
-                    if (ngx_pq_output(r, sizeof(data[k]), &data[k]) == NGX_ERROR) return NGX_ERROR;
+                    if (data[k] == query->output.quote) if (ngx_pq_output(r, sizeof(query->output.escape), &query->output.escape) != NGX_OK) return NGX_ERROR;
+                    if (ngx_pq_output(r, sizeof(data[k]), &data[k]) != NGX_OK) return NGX_ERROR;
                 } else {
-                    if (ngx_pq_output(r, len, (const u_char *)data) == NGX_ERROR) return NGX_ERROR;
+                    if (ngx_pq_output(r, len, (const u_char *)data) != NGX_OK) return NGX_ERROR;
                 }
-                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) == NGX_ERROR) return NGX_ERROR;
+                if (query->output.string && query->output.quote) if (ngx_pq_output(r, sizeof(query->output.quote), &query->output.quote) != NGX_OK) return NGX_ERROR;
             }
         }
     }
@@ -623,7 +623,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
                 name.len -= sizeof("output=") - 1 + 1;
                 ngx_http_variable_t *variable;
                 if (!(variable = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_CHANGEABLE))) return "!ngx_http_add_variable";
-                if ((query->output.index = ngx_http_get_variable_index(cf, &name)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+                if ((query->output.index = ngx_http_get_variable_index(cf, &name)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
                 variable->get_handler = ngx_pq_variable_get_handler;
                 variable->data = query->output.index;
                 continue;
@@ -691,14 +691,14 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd,
             if (value.data[0] == '$') {
                 value.data++;
                 value.len--;
-                if ((argument->value.index = ngx_http_get_variable_index(cf, &value)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+                if ((argument->value.index = ngx_http_get_variable_index(cf, &value)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
             } else argument->value.str = value;
         }
         if (!oid.len) continue;
         if (oid.data[0] == '$') {
             oid.data++;
             oid.len--;
-            if ((argument->oid.index = ngx_http_get_variable_index(cf, &oid)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            if ((argument->oid.index = ngx_http_get_variable_index(cf, &oid)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
         } else {
             ngx_int_t n = ngx_atoi(oid.data, oid.len);
             if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
@@ -717,7 +717,7 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     if (str[1].data[0] == '$') {
         str[1].data++;
         str[1].len--;
-        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
     } else query->name.str = str[1];
     query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, cmd, query);
@@ -1057,7 +1057,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
         if (str[i].data[0] == '$') {
             str[i].data++;
             str[i].len--;
-            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
         } else query->name.str = str[i];
         i++;
     }
@@ -1079,7 +1079,7 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
                 command->str.data = n;
                 command->str.len = s - n;
                 n = s;
-                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) != NGX_OK) return "ngx_http_get_variable_index != NGX_OK";
             } else {
                 if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
                 ngx_memzero(command, sizeof(*command));
