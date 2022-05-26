@@ -891,7 +891,6 @@ static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
         u->resolved->host = host;
         u->resolved->no_port = 1;
     }
-    u->headers_in.status_n = NGX_HTTP_OK;
     if (!plcf->queries.nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries"); return NGX_ERROR; }
     u->request_sent = 1; // force to reinit_request
     return NGX_OK;
