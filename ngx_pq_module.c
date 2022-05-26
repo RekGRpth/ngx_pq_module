@@ -429,25 +429,12 @@ static void ngx_pq_connect_handler(ngx_event_t *ev) {
     }
 }
 
-static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
+static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
-    ngx_pq_data_t *d = data;
-    ngx_int_t rc;
-    switch ((rc = d->peer.get(pc, d->peer.data))) {
-        case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
-        case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
-        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
-    }
-    ngx_pq_save_t *s = NULL;
-    if (pc->connection) {
-        ngx_connection_t *c = pc->connection;
-        for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
-        if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
-        ngx_pq_queries(d);
-        return s->rc;
-    }
     const char **keywords;
     const char **values;
+    ngx_pq_data_t *d = data;
+    ngx_pq_save_t *s = NULL;
     ngx_http_request_t *r = d->request;
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_t *u = r->upstream;
@@ -488,7 +475,7 @@ found:
     values[i] = NULL;
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
-    rc = NGX_DECLINED;
+    ngx_int_t rc = NGX_DECLINED;
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     pgsocket fd;
@@ -536,6 +523,24 @@ close:
 finish:
     PQfinish(conn);
     return rc;
+}
+
+static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
+    ngx_pq_data_t *d = data;
+    ngx_int_t rc;
+    switch ((rc = d->peer.get(pc, d->peer.data))) {
+        case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
+        case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
+    }
+    if (!pc->connection) return ngx_pq_peer_open(pc, data);
+    ngx_pq_save_t *s = NULL;
+    ngx_connection_t *c = pc->connection;
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
+    if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
+    ngx_pq_queries(d);
+    return s->rc;
 }
 
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
