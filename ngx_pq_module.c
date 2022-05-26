@@ -943,9 +943,7 @@ done:
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return; }
     s->res = NULL;
     if (s->rc == NGX_OK) s->read_handler(c->read);
-    switch (s->rc) {
-        case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
-    }
+    if (s->rc == NGX_ERROR) ngx_pq_upstream_finalize_request(r, u, NGX_ERROR);
 }
 
 static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
@@ -953,11 +951,8 @@ static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     ngx_connection_t *c = s->connection;
-    s->rc = NGX_OK;
-    if (s->rc == NGX_OK) s->write_handler(c->write);
-    switch (s->rc) {
-        case NGX_ERROR: ngx_pq_upstream_finalize_request(r, u, NGX_ERROR); return;
-    }
+    s->write_handler(c->write);
+    if (s->rc == NGX_ERROR) ngx_pq_upstream_finalize_request(r, u, NGX_ERROR);
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
