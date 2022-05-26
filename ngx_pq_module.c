@@ -493,13 +493,13 @@ found:
     keywords[i] = "port";
     values[i] = NULL;
     for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (const char *)&p[j + 1]; break; }
+    rc = NGX_DECLINED;
     if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); goto ret; }
     i++;
     keywords[i] = NULL;
     values[i] = NULL;
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
-    rc = NGX_DECLINED;
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     pgsocket fd;
