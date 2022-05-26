@@ -543,11 +543,13 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
     }
     if (!pc->connection) return ngx_pq_peer_open(pc, data);
-    ngx_pq_save_t *s = NULL;
     ngx_connection_t *c = pc->connection;
-    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) { s = d->save = cln->data; break; }
-    if (!s) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s"); return NGX_ERROR; }
-    return ngx_pq_queries_send(d);
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
+        d->save = cln->data;
+        return ngx_pq_queries_send(d);
+    }
+    ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
+    return NGX_ERROR;
 }
 
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
