@@ -24,6 +24,7 @@ typedef PQExpBufferData *PQExpBuffer;
 extern void appendBinaryPQExpBuffer(PQExpBuffer str, const char *data, size_t datalen);
 extern void appendPQExpBufferStr(PQExpBuffer str, const char *data);
 extern void initPQExpBuffer(PQExpBuffer str);
+extern void resetPQExpBuffer(PQExpBuffer str);
 extern void termPQExpBuffer(PQExpBuffer str);
 
 typedef struct {
@@ -368,12 +369,13 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
     if (c->write->timer_set) ngx_del_timer(c->write);
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); return NGX_ERROR; }
     char *str;
+    PQExpBufferData sql;
+    initPQExpBuffer(&sql);
     for (ngx_queue_t *q = ngx_queue_head(&d->queue), *_; q != ngx_queue_sentinel(&d->queue) && (_ = ngx_queue_next(q)); q = _) {
         ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
         ngx_pq_query_t *query = qq->query;
         ngx_pq_command_t *command = query->commands.elts;
-        PQExpBufferData sql;
-        initPQExpBuffer(&sql);
+        resetPQExpBuffer(&sql);
         for (ngx_uint_t j = 0; j < query->commands.nelts; j++) {
             if (command[j].index) {
                 if (!(str = PQescapeIdentifier(s->conn, (const char *)command[j].str.data, command[j].str.len))) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier"); termPQExpBuffer(&sql); return NGX_ERROR; }
@@ -388,8 +390,8 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d) {
             if (query->type & ngx_pq_type_prepare) if (!PQsendPrepare(s->conn, (const char *)query->name.str.data, sql.data, qq->nParams, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); termPQExpBuffer(&sql); return NGX_ERROR; }
             if (query->type & ngx_pq_type_execute) if (!PQsendQueryPrepared(s->conn, (const char *)query->name.str.data, qq->nParams, qq->paramValues, qq->paramLengths, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); termPQExpBuffer(&sql); return NGX_ERROR; }
         }
-        termPQExpBuffer(&sql);
     }
+    termPQExpBuffer(&sql);
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); return NGX_ERROR; }
     s->read_handler = ngx_pq_result_handler;
     s->write_handler = ngx_pq_result_handler;
