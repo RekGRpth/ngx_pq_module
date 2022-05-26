@@ -411,6 +411,7 @@ static ngx_int_t ngx_pq_queries_init(ngx_http_request_t *r, ngx_array_t *queries
     return NGX_OK;
 }
 
+static ngx_int_t ngx_pq_queries_send(ngx_pq_data_t *d);
 static void ngx_pq_result_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
     ngx_connection_t *c = ev->data;
@@ -449,6 +450,7 @@ done:
         ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
         ngx_array_t *queries = &plcf->queries;
         if (ngx_pq_queries_init(r, queries) != NGX_OK) return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        if ((s->rc = ngx_pq_queries_send(d)) != NGX_AGAIN) return ngx_pq_upstream_finalize_request(r, u, s->rc);
     }
     ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
