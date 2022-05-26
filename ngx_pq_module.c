@@ -464,8 +464,9 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
         options = &pscf->options;
     }
-    if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
-    if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+    ngx_int_t rc = NGX_ERROR;
+    if (!(keywords = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); goto ret; }
+    if (!(values = ngx_pnalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pnalloc"); goto ret; }
     ngx_pq_option_t *option = options->elts;
     ngx_uint_t i;
     for (i = 0; i < options->nelts; i++) {
@@ -484,7 +485,7 @@ found:
         i++;
     }
     u_char *p;
-    if (!(p = ngx_pnalloc(r->pool, pc->name->len + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+    if (!(p = ngx_pnalloc(r->pool, pc->name->len + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pstrdup"); goto ret; }
     (void)ngx_cpystrn(p, pc->name->data, pc->name->len + 1);
     keywords[i] = pc->sockaddr->sa_family != AF_UNIX ? "hostaddr" : "host";
     values[i] = (const char *)p + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
@@ -492,13 +493,13 @@ found:
     keywords[i] = "port";
     values[i] = NULL;
     for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (const char *)&p[j + 1]; break; }
-    if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); return NGX_ERROR; }
+    if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); goto ret; }
     i++;
     keywords[i] = NULL;
     values[i] = NULL;
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
-    ngx_int_t rc = NGX_DECLINED;
+    rc = NGX_DECLINED;
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQstatus == CONNECTION_BAD"); goto finish; }
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     pgsocket fd;
@@ -544,6 +545,7 @@ close:
     ngx_close_connection(c);
 finish:
     PQfinish(conn);
+ret:
     return rc;
 }
 
