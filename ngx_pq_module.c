@@ -446,7 +446,7 @@ done:
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
     if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, ev->log, 0, "!ngx_queue_empty"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
     ngx_pq_query_t *query = d->query;
-    if (query && query->type && ngx_pq_type_upstream) {
+    if (query && query->type & ngx_pq_type_upstream) {
         ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
         ngx_array_t *queries = &plcf->queries;
         if (ngx_pq_queries_init(r, queries) != NGX_OK) return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_INTERNAL_SERVER_ERROR);
