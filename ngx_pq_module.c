@@ -910,7 +910,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "s->rc = %i", s->rc);
-    if (s->rc >= NGX_HTTP_SPECIAL_RESPONSE) { (void)ngx_http_filter_finalize_request(r, NULL, s->rc); return; }
+    if (s->rc >= NGX_HTTP_SPECIAL_RESPONSE) return (void)ngx_http_filter_finalize_request(r, NULL, s->rc);
     if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
