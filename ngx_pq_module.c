@@ -365,10 +365,9 @@ static ngx_int_t ngx_pq_default_handler(ngx_pq_data_t *d) {
     return NGX_HTTP_BAD_GATEWAY;
 }
 
-static ngx_int_t ngx_pq_command_handler(ngx_http_request_t *r) {
+static ngx_int_t ngx_pq_command_handler(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_upstream_t *u = r->upstream;
-    ngx_pq_data_t *d = u->peer.data;
     ngx_pq_query_t *query = d->query;
     ngx_pq_save_t *s = d->save;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
@@ -553,7 +552,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             d->query = qq->query;
         }
         switch (PQresultStatus(s->res)) {
-            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COMMAND_OK"); if (rc == NGX_OK) rc = ngx_pq_command_handler(r); break;
+            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COMMAND_OK"); if (rc == NGX_OK) rc = ngx_pq_command_handler(d); break;
             case PGRES_COPY_OUT: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT"); if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_copy_handler(d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error_handler(d); break;
             case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
