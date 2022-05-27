@@ -528,8 +528,16 @@ ret:
 
 static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
+    ngx_connection_t *c = s->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     PQfinish(s->conn);
+    if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&s->queue);
+        ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
+        ngx_queue_remove(q);
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
+        (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
+    }
 }
 
 static void ngx_pq_connect_handler(ngx_event_t *ev) {
