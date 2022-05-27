@@ -363,7 +363,9 @@ static ngx_int_t ngx_pq_default_handler(ngx_http_request_t *r) {
     ngx_pq_save_t *s = d->save;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res)));
+    const char *value;
+    if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "%s and %s not supported", PQresStatus(PQresultStatus(s->res)), value); }
+    else { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); }
     return NGX_HTTP_BAD_GATEWAY;
 }
 
