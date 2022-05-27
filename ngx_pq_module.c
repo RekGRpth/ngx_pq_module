@@ -415,13 +415,48 @@ static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_OK;
+    ngx_pool_t *p;
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(s->notify = PQnotifies(s->conn))) break;
         ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", s->notify->relname, s->notify->extra, s->notify->be_pid);
-        if (ngx_http_push_stream_add_msg_to_channel_my) {
+        if (!ngx_http_push_stream_add_msg_to_channel_my) goto cont;
+        ngx_str_t id = { ngx_strlen(s->notify->relname), (u_char *)s->notify->relname };
+        ngx_str_t text = { ngx_strlen(s->notify->extra), (u_char *)s->notify->extra };
+        if (!(p = ngx_create_pool(4096 + id.len + text.len, s->connection->log))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_create_pool"); rc = NGX_ERROR; goto cont; }
+        if (rc == NGX_OK) switch ((rc = ngx_http_push_stream_add_msg_to_channel_my(s->connection->log, &id, &text, NULL, NULL, 1, p))) {
+            case NGX_ERROR: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_ERROR"); break;
+            case NGX_DECLINED: ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_DECLINED"); {
+                for (ngx_queue_t *q = ngx_queue_head(&s->queue), *_; q != ngx_queue_sentinel(&s->queue) && (_ = ngx_queue_next(q)); q = _) {
+                    ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
+                    if (cq->channel.len != id.len || ngx_strncmp(cq->channel.data, id.data, id.len)) continue;
+                    ngx_queue_remove(q);
+                    break;
+                }
+                if (PQpipelineStatus(s->conn) == PQ_PIPELINE_OFF) if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQenterPipelineMode"); rc = NGX_ERROR; goto destroy; }
+                PQExpBufferData sql;
+                initPQExpBuffer(&sql);
+                appendPQExpBufferStr(&sql, "UNLISTEN ");
+                char *str;
+                if (!(str = PQescapeIdentifier(s->conn, (const char *)id.data, id.len))) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQescapeIdentifier"); rc = NGX_ERROR; goto term; }
+                appendPQExpBufferStr(&sql, str);
+                PQfreemem(str);
+                if (PQExpBufferDataBroken(sql)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); rc = NGX_ERROR; goto term; }
+                if (!PQsendQueryParams(s->conn, sql.data, 0, NULL, NULL, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); rc = NGX_ERROR; goto term; }
+                ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryParams('%s')", sql.data);
+                rc = NGX_OK;
+term:
+                termPQExpBuffer(&sql);
+            } break;
+            case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_DONE"); rc = NGX_OK; break;
+            case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_OK"); break;
+            default: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == %i", rc); break;
         }
+destroy:
+        ngx_destroy_pool(p);
+cont:
         PQfreemem(s->notify);
     }
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
     return rc;
 }
 
@@ -526,7 +561,7 @@ ret:
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
-    ngx_int_t rc = ngx_pq_notify(s);
+    ngx_int_t rc = NGX_OK;
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(s->res = PQgetResult(s->conn))) if (!(s->res = PQgetResult(s->conn))) goto done;
         if (d && !ngx_queue_empty(&d->queue)) {
@@ -548,6 +583,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 done:
     if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQgetResult"); return NGX_HTTP_BAD_GATEWAY; }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
+    if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (!d) return rc;
     if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
     if (rc == NGX_OK && d->query && d->query->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
