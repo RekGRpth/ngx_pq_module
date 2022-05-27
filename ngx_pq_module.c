@@ -261,21 +261,47 @@ static ngx_int_t ngx_pq_output(ngx_pq_data_t *d, size_t len, const u_char *data)
     ngx_http_request_t *r = d->request;
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%*s", (int)len, data);
     if (!len) return NGX_OK;
-    ngx_http_upstream_t *u = r->upstream;
-    ngx_chain_t *cl, **ll;
-    for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
-    if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
-    *ll = cl;
-    ngx_buf_t *b = cl->buf;
-    if (b->start) ngx_pfree(r->pool, b->start);
-    if (!(b->start = ngx_palloc(r->pool, len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NGX_ERROR; }
-    b->end = b->start + len;
-    b->flush = 1;
-    b->last = ngx_copy(b->start, data, len);
-    b->memory = 1;
-    b->pos = b->start;
-    b->tag = u->output.tag;
-    b->temporary = 1;
+    ngx_pq_query_t *query = d->query;
+    if (query->type & ngx_pq_type_upstream) {
+        if (query->output.index) {
+            ngx_pq_save_t *s = d->save;
+            ngx_pq_variable_t *variable = s->variables.elts;
+            ngx_uint_t i;
+            for (i = 0; i < s->variables.nelts; i++) if (variable[i].index == query->output.index) break;
+            ngx_chain_t *cl;
+            ngx_connection_t *c = s->connection;
+            if (i == s->variables.nelts) {
+                if (!s->variables.elts && ngx_array_init(&s->variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
+                if (!(variable = ngx_array_push(&s->variables))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_array_push"); return NGX_ERROR; }
+                ngx_memzero(variable, sizeof(*variable));
+                variable->index = query->output.index;
+                if (!(cl = variable->cl = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            } else {
+                variable = &variable[i];
+                cl = variable->cl;
+                if (!(cl = cl->next = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            }
+            cl->next = NULL;
+            if (!(cl->buf = ngx_create_temp_buf(c->pool, len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
+            cl->buf->last = ngx_copy(cl->buf->last, data, len);
+        }
+    } else if (query->output.type) {
+        ngx_http_upstream_t *u = r->upstream;
+        ngx_chain_t *cl, **ll;
+        for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
+        if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
+        *ll = cl;
+        ngx_buf_t *b = cl->buf;
+        if (b->start) ngx_pfree(r->pool, b->start);
+        if (!(b->start = ngx_palloc(r->pool, len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_palloc"); return NGX_ERROR; }
+        b->end = b->start + len;
+        b->flush = 1;
+        b->last = ngx_copy(b->start, data, len);
+        b->memory = 1;
+        b->pos = b->start;
+        b->tag = u->output.tag;
+        b->temporary = 1;
+    }
     return NGX_OK;
 }
 
@@ -284,7 +310,7 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_pq_query_t *query = d->query;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
-    if (!d || !d->query || !d->query->output.type) return NGX_OK;
+    if (!d || !d->query) return NGX_OK;
     if (query->output.header) {
         if (d->row > 0) if (ngx_pq_output(d, sizeof("\n") - 1, (const u_char *)"\n") != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
         for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
@@ -326,7 +352,7 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 
 static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT"); 
-    if (!d || !d->query || !d->query->output.type) return NGX_OK;
+    if (!d || !d->query) return NGX_OK;
     char *buffer = NULL;
     int len;
     ngx_int_t rc = NGX_OK;
