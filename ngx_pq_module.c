@@ -132,6 +132,7 @@ typedef struct {
     ngx_event_handler_pt write_handler;
     ngx_int_t rc;
     ngx_msec_t timeout;
+    ngx_queue_t queue;
     PGconn *conn;
     PGresult *res;
     void *data;
@@ -366,9 +367,25 @@ static ngx_int_t ngx_pq_command_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
     ngx_pq_data_t *d = u->peer.data;
-//    ngx_pq_save_t *s = d->save;
+    ngx_pq_query_t *query = d->query;
+    ngx_pq_save_t *s = d->save;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
+    const char *value;
+    size_t len;
+    if ((value = PQcmdStatus(s->res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
+    else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->res))); }
+    if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
+        ngx_pq_command_t *command = query->commands.elts;
+        command = &command[1];
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%V", &command->str);
+        ngx_connection_t *c = s->connection;
+        ngx_pq_channel_queue_t *cq;
+        if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+        ngx_queue_insert_tail(&s->queue, &cq->queue);
+        if (!(cq->channel.data = ngx_pstrdup(c->pool, &command->str))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pstrdup"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+        cq->channel.len = command->str.len;
+    }
     return NGX_OK;
 }
 
@@ -602,6 +619,7 @@ found:
     c->write->log = pc->log;
     if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+    ngx_queue_init(&s->queue);
     ngx_pool_cleanup_t *cln;
     if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
     cln->data = s;
