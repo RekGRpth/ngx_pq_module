@@ -150,8 +150,8 @@ typedef struct {
 } ngx_pq_data_t;
 
 typedef struct {
+    ngx_chain_t *cl;
     ngx_int_t index;
-    ngx_str_t value;
 } ngx_pq_variable_t;
 
 static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
@@ -720,8 +720,10 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     ngx_int_t index = data;
     ngx_pq_variable_t *variable = s->variables.elts;
     for (ngx_uint_t i = 0; i < s->variables.nelts; i++) if (variable[i].index == index) {
-        v->data = variable[i].value.data;
-        v->len = variable[i].value.len;
+        for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) v->len += cl->buf->last - cl->buf->pos;
+        u_char *p;
+        if (!(p = v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+        for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) p = ngx_copy(p, cl->buf->pos, cl->buf->last - cl->buf->pos);
         v->no_cacheable = 0;
         v->not_found = 0;
         v->valid = 1;
