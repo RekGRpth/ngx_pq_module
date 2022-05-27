@@ -1020,29 +1020,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
 }
 
-static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
-    ngx_pq_data_t *d = u->peer.data;
-    ngx_pq_save_t *s = d->save;
-    switch (PQstatus(s->conn)) {
-        case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
-        case CONNECTION_AWAITING_RESPONSE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AWAITING_RESPONSE"); break;
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
-        case CONNECTION_CHECK_STANDBY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_STANDBY"); break;
-        case CONNECTION_CHECK_TARGET: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_TARGET"); break;
-        case CONNECTION_CHECK_WRITABLE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_WRITABLE"); break;
-        case CONNECTION_CONSUME: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CONSUME"); break;
-        case CONNECTION_GSS_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_GSS_STARTUP"); break;
-        case CONNECTION_MADE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_MADE"); break;
-        case CONNECTION_NEEDED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_NEEDED"); break;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK"); return ngx_pq_upstream_finalize_request(r, u, ngx_pq_result_handler(s, d));
-        case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
-        case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
-        case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
-    }
-    return ngx_pq_upstream_finalize_request(r, u, ngx_pq_connect_handler(s, d));
-}
-
-static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
+static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     switch (PQstatus(s->conn)) {
@@ -1068,8 +1046,8 @@ static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
     r->state = 0;
-    u->read_event_handler = ngx_pq_read_event_handler;
-    u->write_event_handler = ngx_pq_write_event_handler;
+    u->read_event_handler = ngx_pq_event_handler;
+    u->write_event_handler = ngx_pq_event_handler;
     return NGX_OK;
 }
 
