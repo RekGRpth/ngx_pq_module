@@ -370,8 +370,10 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_queue_t *q = ngx_queue_head(&d->queue);
-    ngx_queue_remove(q);
+    if (d && !ngx_queue_empty(&d->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+    }
     const char *value;
     if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->res)), value); }
     else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->res))); }
@@ -379,8 +381,10 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_queue_t *q = ngx_queue_head(&d->queue);
-    ngx_queue_remove(q);
+    if (d && !ngx_queue_empty(&d->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+    }
     const char *value;
     if ((value = PQcmdStatus(s->res)) && ngx_strlen(value)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s and %s not supported", PQresStatus(PQresultStatus(s->res)), value); }
     else { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); }
