@@ -1,8 +1,10 @@
 ngx_addon_name=ngx_pq_module
+ngx_feature_path="`pg_config --includedir` `pg_config --includedir-server`"
 
 NGX_PQ_SRCS=$ngx_addon_dir/ngx_pq_module.c
 
 if test -n "$ngx_module_link"; then
+    ngx_module_incs="$ngx_feature_path"
     ngx_module_libs=-lpq
     ngx_module_name=$ngx_addon_name
     ngx_module_srcs=$NGX_PQ_SRCS
@@ -10,6 +12,7 @@ if test -n "$ngx_module_link"; then
 
     . auto/module
 else
+    CORE_INCS="$CORE_INCS $ngx_feature_path"
     CORE_LIBS="$CORE_LIBS -lpq"
     HTTP_MODULES="$HTTP_MODULES $ngx_addon_name"
     NGX_ADDON_SRCS="$NGX_ADDON_SRCS $NGX_PQ_SRCS"
