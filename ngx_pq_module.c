@@ -565,8 +565,6 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
         }
     }
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); goto ret; }
-    s->read_handler = ngx_pq_result_handler;
-    s->write_handler = ngx_pq_result_handler;
     c->read->active = 1;
     c->write->active = 0;
     rc = NGX_AGAIN;
@@ -691,8 +689,6 @@ found:
         if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
     }
     pc->connection = c;
-    s->read_handler = ngx_pq_connect_handler;
-    s->write_handler = ngx_pq_connect_handler;
     switch (PQconnectPoll(conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PGRES_POLLING_ACTIVE"); break;
         case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PGRES_POLLING_FAILED"); goto destroy;
