@@ -308,10 +308,12 @@ static ngx_int_t ngx_pq_output(ngx_pq_data_t *d, size_t len, const u_char *data)
 
 static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); 
-    ngx_pq_query_t *query = d->query;
-    ngx_queue_t *q = ngx_queue_head(&d->queue);
-    ngx_queue_remove(q);
+    if (d && !ngx_queue_empty(&d->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+    }
     if (!d || !d->query) return NGX_OK;
+    ngx_pq_query_t *query = d->query;
     if (query->output.header) {
         if (d->row > 0) if (ngx_pq_output(d, sizeof("\n") - 1, (const u_char *)"\n") != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
         for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
