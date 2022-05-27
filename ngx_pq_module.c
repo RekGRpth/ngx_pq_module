@@ -412,7 +412,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
     ngx_array_t *queries = &plcf->queries;
     if (uscf->srv_conf && type & ngx_pq_type_upstream) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
-        queries = &pscf->queries;
+        if (pscf->queries.elts) queries = &pscf->queries;
     }
     if (!queries->nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries->nelts"); goto ret; }
     ngx_pq_query_t *query = queries->elts;
