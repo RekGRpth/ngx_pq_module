@@ -280,6 +280,7 @@ static ngx_int_t ngx_pq_output(ngx_http_request_t *r, size_t len, const u_char *
 
 static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
+    if (rc == NGX_AGAIN) return;
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (s) s->rc = rc;
@@ -567,7 +568,7 @@ done:
     if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "PQgetResult"); return NGX_HTTP_BAD_GATEWAY; }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
     if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
-    if (d->query->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
+    if (rc == NGX_OK && d->query->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
     return rc;
 }
 
