@@ -391,15 +391,16 @@ static ngx_int_t ngx_pq_sync(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_pq_query_t *query = d->query;
-    ngx_queue_t *q = ngx_queue_head(&d->queue);
-    ngx_queue_remove(q);
+    if (d && !ngx_queue_empty(&d->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&d->queue);
+        ngx_queue_remove(q);
+    }
     const char *value;
     size_t len = 0;
     if ((value = PQcmdStatus(s->res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
     else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->res))); }
-    if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
-        ngx_pq_command_t *command = query->commands.elts;
+    if (ngx_http_push_stream_delete_channel_my && d && d->query && d->query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
+        ngx_pq_command_t *command = d->query->commands.elts;
         command = &command[1];
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%V", &command->str);
         ngx_connection_t *c = s->connection;
