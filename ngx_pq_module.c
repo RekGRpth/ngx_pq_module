@@ -439,41 +439,6 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     return rc;
 }
 
-static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type);
-static void ngx_pq_result_handler(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_connection_t *c = s->connection;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
-    ngx_http_request_t *r = d->request;
-    ngx_http_upstream_t *u = r->upstream;
-    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
-    s->rc = ngx_pq_notify(s);
-    ngx_queue_t *q;
-    while (PQstatus(s->conn) == CONNECTION_OK) {
-        if (!(s->res = PQgetResult(s->conn))) continue;
-        if (!ngx_queue_empty(&d->queue)) {
-            q = ngx_queue_head(&d->queue);
-            ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-            d->query = qq->query;
-        }
-        switch (PQresultStatus(s->res)) {
-            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_COMMAND_OK"); if (s->rc == NGX_OK) s->rc = ngx_pq_command_handler(r); break;
-            case PGRES_COPY_OUT: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_COPY_OUT"); if (s->rc == NGX_OK && d->query->output.type) s->rc = ngx_pq_copy_handler(r); break;
-            case PGRES_FATAL_ERROR: s->rc = ngx_pq_error_handler(r); break;
-            case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
-            case PGRES_TUPLES_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_TUPLES_OK"); if (s->rc == NGX_OK && d->query->output.type) s->rc = ngx_pq_tuple_handler(r); break;
-            default: ngx_log_error(NGX_LOG_ERR, c->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); s->rc = NGX_HTTP_BAD_GATEWAY; q = ngx_queue_head(&d->queue); ngx_queue_remove(q); break;
-        }
-        if (s->rc == NGX_OK && d->query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
-        PQclear(s->res);
-    }
-done:
-    if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "PQgetResult"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
-    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
-    if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_queue_empty"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
-    if (d->query->type & ngx_pq_type_upstream) { if ((s->rc = ngx_pq_queries(d, ngx_pq_type_location)) != NGX_AGAIN) return ngx_pq_upstream_finalize_request(r, u, s->rc); return; }
-    ngx_pq_upstream_finalize_request(r, u, s->rc);
-}
-
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
@@ -570,6 +535,40 @@ ret:
     termPQExpBuffer(&name);
     termPQExpBuffer(&sql);
     return rc;
+}
+
+static void ngx_pq_result_handler(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    ngx_connection_t *c = s->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
+    ngx_http_request_t *r = d->request;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
+    s->rc = ngx_pq_notify(s);
+    ngx_queue_t *q;
+    while (PQstatus(s->conn) == CONNECTION_OK) {
+        if (!(s->res = PQgetResult(s->conn))) continue;
+        if (!ngx_queue_empty(&d->queue)) {
+            q = ngx_queue_head(&d->queue);
+            ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+            d->query = qq->query;
+        }
+        switch (PQresultStatus(s->res)) {
+            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_COMMAND_OK"); if (s->rc == NGX_OK) s->rc = ngx_pq_command_handler(r); break;
+            case PGRES_COPY_OUT: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_COPY_OUT"); if (s->rc == NGX_OK && d->query->output.type) s->rc = ngx_pq_copy_handler(r); break;
+            case PGRES_FATAL_ERROR: s->rc = ngx_pq_error_handler(r); break;
+            case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
+            case PGRES_TUPLES_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_TUPLES_OK"); if (s->rc == NGX_OK && d->query->output.type) s->rc = ngx_pq_tuple_handler(r); break;
+            default: ngx_log_error(NGX_LOG_ERR, c->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); s->rc = NGX_HTTP_BAD_GATEWAY; q = ngx_queue_head(&d->queue); ngx_queue_remove(q); break;
+        }
+        if (s->rc == NGX_OK && d->query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) s->rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        PQclear(s->res);
+    }
+done:
+    if ((s->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "PQgetResult"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
+    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
+    if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_queue_empty"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY); }
+    if (d->query->type & ngx_pq_type_upstream) { if ((s->rc = ngx_pq_queries(d, ngx_pq_type_location)) != NGX_AGAIN) return ngx_pq_upstream_finalize_request(r, u, s->rc); return; }
+    ngx_pq_upstream_finalize_request(r, u, s->rc);
 }
 
 static void ngx_pq_save_cln_handler(void *data) {
