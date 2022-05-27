@@ -339,7 +339,6 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
     const char *value;
@@ -349,7 +348,6 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
     const char *value;
