@@ -364,7 +364,6 @@ static ngx_int_t ngx_pq_sync(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COMMAND_OK");
     ngx_pq_query_t *query = d->query;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
