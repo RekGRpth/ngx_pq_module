@@ -356,6 +356,11 @@ static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return NGX_HTTP_BAD_GATEWAY;
 }
 
+static ngx_int_t ngx_pq_sync(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC");
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COMMAND_OK");
     ngx_pq_query_t *query = d->query;
@@ -542,7 +547,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
             case PGRES_COPY_OUT: if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
-            case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
+            case PGRES_PIPELINE_SYNC: rc = ngx_pq_sync(s, d); PQclear(s->res); goto done;
             case PGRES_TUPLES_OK: if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
