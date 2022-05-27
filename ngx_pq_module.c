@@ -894,7 +894,10 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
     ngx_connection_t *c = ev->data;
     ngx_pq_save_t *s = c->data;
-//    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && ngx_pq_process(s) == NGX_OK) { ngx_add_timer(c->read, s->timeout); return; }
+    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && PQstatus(s->conn) == CONNECTION_OK) {
+        ngx_add_timer(c->read, s->timeout);
+        return ngx_pq_result_handler(s, NULL);
+    }
     c->data = s->data;
     s->read_handler(ev);
 }
