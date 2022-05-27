@@ -278,15 +278,6 @@ static ngx_int_t ngx_pq_output(ngx_http_request_t *r, size_t len, const u_char *
     return NGX_OK;
 }
 
-static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
-    if (rc == NGX_AGAIN) return;
-    ngx_pq_data_t *d = u->peer.data;
-    ngx_pq_save_t *s = d->save;
-    if (s) s->rc = rc;
-    if (u->cleanup) (*u->cleanup)(r);
-}
-
 static ngx_int_t ngx_pq_tuple_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
@@ -1018,6 +1009,15 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     }
     if (ngx_http_output_filter(r, u->out_bufs) != NGX_OK) return;
     ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
+}
+
+static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
+    if (rc == NGX_AGAIN) return;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (s) s->rc = rc;
+    if (u->cleanup) (*u->cleanup)(r);
 }
 
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
