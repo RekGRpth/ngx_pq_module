@@ -529,7 +529,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_int_t rc = ngx_pq_notify(s);
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(s->res = PQgetResult(s->conn))) if (!(s->res = PQgetResult(s->conn))) goto done;
-        if (!ngx_queue_empty(&d->queue)) {
+        if (d && !ngx_queue_empty(&d->queue)) {
             ngx_queue_t *q = ngx_queue_head(&d->queue);
             ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
             d->query = qq->query;
