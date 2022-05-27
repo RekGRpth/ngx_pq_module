@@ -325,6 +325,7 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 
 static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT"); 
+    if (!d || !d->query || !d->query->output.type) return NGX_OK;
     char *buffer = NULL;
     int len;
     ngx_int_t rc = NGX_OK;
@@ -545,7 +546,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         }
         switch (PQresultStatus(s->res)) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
-            case PGRES_COPY_OUT: if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_copy(s, d); break;
+            case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
             case PGRES_PIPELINE_SYNC: rc = ngx_pq_sync(s, d); PQclear(s->res); goto done;
             case PGRES_TUPLES_OK: if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_tuple(s, d); break;
