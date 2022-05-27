@@ -356,6 +356,17 @@ static ngx_int_t ngx_pq_error_handler(ngx_http_request_t *r) {
     return NGX_HTTP_BAD_GATEWAY;
 }
 
+static ngx_int_t ngx_pq_default_handler(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    ngx_queue_t *q = ngx_queue_head(&d->queue);
+    ngx_queue_remove(q);
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res)));
+    return NGX_HTTP_BAD_GATEWAY;
+}
+
 static ngx_int_t ngx_pq_command_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
@@ -550,7 +561,7 @@ static ngx_int_t ngx_pq_result_handler(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             case PGRES_FATAL_ERROR: rc = ngx_pq_error_handler(r); break;
             case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
             case PGRES_TUPLES_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_TUPLES_OK"); if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_tuple_handler(r); break;
-            default: ngx_log_error(NGX_LOG_ERR, c->log, 0, "%s not supported", PQresStatus(PQresultStatus(s->res))); rc = NGX_HTTP_BAD_GATEWAY; q = ngx_queue_head(&d->queue); ngx_queue_remove(q); break;
+            default: rc = ngx_pq_default_handler(r); break;
         }
         if (rc == NGX_OK && d->query->output.type && !d->row) if (ngx_pq_output(r, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
         PQclear(s->res);
