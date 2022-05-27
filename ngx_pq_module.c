@@ -549,7 +549,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
             case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
-            case PGRES_PIPELINE_SYNC: rc = ngx_pq_sync(s, d); PQclear(s->res); goto done;
+            case PGRES_PIPELINE_SYNC: (void)ngx_pq_sync(s, d); PQclear(s->res); goto done;
             case PGRES_TUPLES_OK: if (rc == NGX_OK) rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
