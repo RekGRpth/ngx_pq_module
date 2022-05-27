@@ -1,6 +1,9 @@
 #include <ngx_http.h>
 #include <libpq-fe.h>
 
+extern ngx_int_t ngx_http_push_stream_add_msg_to_channel_my(ngx_log_t *log, ngx_str_t *id, ngx_str_t *text, ngx_str_t *event_id, ngx_str_t *event_type, ngx_flag_t store_messages, ngx_pool_t *temp_pool) __attribute__((weak));
+extern ngx_int_t ngx_http_push_stream_delete_channel_my(ngx_log_t *log, ngx_str_t *id, u_char *text, size_t len, ngx_pool_t *temp_pool) __attribute__((weak));
+
 #define DEF_PGPORT 5432
 
 #define PQExpBufferDataBroken(buf) ((buf).maxlen == 0)
@@ -116,6 +119,11 @@ typedef struct {
     ngx_queue_t queue;
     Oid *paramTypes;
 } ngx_pq_query_queue_t;
+
+typedef struct {
+    ngx_queue_t queue;
+    ngx_str_t channel;
+} ngx_pq_channel_queue_t;
 
 typedef struct {
     ngx_array_t variables;
@@ -354,6 +362,16 @@ static ngx_int_t ngx_pq_error_handler(ngx_http_request_t *r) {
     return NGX_HTTP_BAD_GATEWAY;
 }
 
+static ngx_int_t ngx_pq_command_handler(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = u->peer.data;
+//    ngx_pq_save_t *s = d->save;
+    ngx_queue_t *q = ngx_queue_head(&d->queue);
+    ngx_queue_remove(q);
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type);
 static void ngx_pq_result_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
@@ -373,7 +391,7 @@ static void ngx_pq_result_handler(ngx_event_t *ev) {
             d->query = qq->query;
         }
         switch (PQresultStatus(s->res)) {
-            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_COMMAND_OK"); q = ngx_queue_head(&d->queue); ngx_queue_remove(q); break;
+            case PGRES_COMMAND_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_COMMAND_OK"); if (s->rc == NGX_OK) s->rc = ngx_pq_command_handler(r); break;
             case PGRES_COPY_OUT: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_COPY_OUT"); if (s->rc == NGX_OK && d->query->output.type) s->rc = ngx_pq_copy_handler(r); break;
             case PGRES_FATAL_ERROR: s->rc = ngx_pq_error_handler(r); break;
             case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_PIPELINE_SYNC"); PQclear(s->res); goto done;
