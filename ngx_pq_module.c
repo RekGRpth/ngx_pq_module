@@ -128,14 +128,15 @@ typedef struct {
 typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
-    ngx_event_handler_pt read_handler;
-    ngx_event_handler_pt write_handler;
     ngx_int_t rc;
     ngx_msec_t timeout;
     ngx_queue_t queue;
     PGconn *conn;
     PGresult *res;
-    void *data;
+    struct {
+        ngx_event_handler_pt read_handler;
+        void *data;
+    } keep;
 } ngx_pq_save_t;
 
 typedef struct {
@@ -898,12 +899,8 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         ngx_add_timer(c->read, s->timeout);
         return ngx_pq_result_handler(s, NULL);
     }
-    c->data = s->data;
-    s->read_handler(ev);
-}
-
-static void ngx_pq_write_handler(ngx_event_t *ev) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+    c->data = s->keep.data;
+    s->keep.read_handler(ev);
 }
 
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
@@ -928,12 +925,10 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
-    s->data = c->data;
-    s->read_handler = c->read->handler;
-    s->write_handler = c->write->handler;
+    s->keep.data = c->data;
+    s->keep.read_handler = c->read->handler;
     c->data = s;
     c->read->handler = ngx_pq_read_handler;
-    c->write->handler = ngx_pq_write_handler;
     if (!pscf->log) return;
     c->log = pscf->log;
     c->pool->log = c->log;
