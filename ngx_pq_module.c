@@ -281,6 +281,7 @@ static ngx_int_t ngx_pq_output(ngx_pq_data_t *d, size_t len, const u_char *data)
 
 static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); 
+    if (!d || !d->query || !d->query->output.type) return NGX_OK;
     ngx_pq_query_t *query = d->query;
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
@@ -549,10 +550,10 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
             case PGRES_PIPELINE_SYNC: rc = ngx_pq_sync(s, d); PQclear(s->res); goto done;
-            case PGRES_TUPLES_OK: if (rc == NGX_OK && d->query->output.type) rc = ngx_pq_tuple(s, d); break;
+            case PGRES_TUPLES_OK: if (rc == NGX_OK) rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
-        if (rc == NGX_OK && d->query->output.type && !d->row) if (ngx_pq_output(d, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        if (rc == NGX_OK && d && d->query && d->query->output.type && !d->row) if (ngx_pq_output(d, ngx_strlen(PQcmdStatus(s->res)), (const u_char *)PQcmdStatus(s->res)) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
         PQclear(s->res);
     }
 done:
