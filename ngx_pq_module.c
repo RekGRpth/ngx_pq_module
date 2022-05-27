@@ -588,25 +588,22 @@ static void ngx_pq_save_cln_handler(void *data) {
     }
 }
 
-static void ngx_pq_connect_handler(ngx_event_t *ev) {
-    ngx_connection_t *c = ev->data;
-    ngx_http_request_t *r = c->data;
+static void ngx_pq_connect_handler(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    ngx_connection_t *c = s->connection;
+    ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
-    ngx_pq_data_t *d = u->peer.data;
-    ngx_pq_save_t *s = d->save;
     switch (PQstatus(s->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "CONNECTION_OK"); goto connected;
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "CONNECTION_OK"); goto connected;
         default: break;
     }
-    c = s->connection;
     s->rc = NGX_AGAIN;
     switch (PQconnectPoll(s->conn)) {
-        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_ACTIVE"); return;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, ev->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
-        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_OK"); goto connected;
-        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return;
-        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; return;
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_ACTIVE"); return;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessageMy(s->conn), "PGRES_POLLING_FAILED"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_OK"); goto connected;
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; return;
     }
 connected:
     if ((s->rc = ngx_pq_queries(d, ngx_pq_type_location|ngx_pq_type_upstream)) != NGX_AGAIN) return ngx_pq_upstream_finalize_request(r, u, s->rc);
@@ -1052,7 +1049,7 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
-    return ngx_pq_connect_handler(c->read);
+    return ngx_pq_connect_handler(s, d);
 }
 
 static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
@@ -1075,7 +1072,7 @@ static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
-    return ngx_pq_connect_handler(c->write);
+    return ngx_pq_connect_handler(s, d);
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
