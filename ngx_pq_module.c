@@ -1042,7 +1042,11 @@ static void ngx_pq_read_event_handler(ngx_http_request_t *r, ngx_http_upstream_t
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     ngx_connection_t *c = s->connection;
-    s->read_handler(c->read);
+    switch (PQstatus(s->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK"); return ngx_pq_result_handler(c->read);
+        default: return ngx_pq_connect_handler(c->read);
+    }
 }
 
 static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
@@ -1050,7 +1054,11 @@ static void ngx_pq_write_event_handler(ngx_http_request_t *r, ngx_http_upstream_
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     ngx_connection_t *c = s->connection;
-    s->write_handler(c->write);
+    switch (PQstatus(s->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); return ngx_pq_upstream_finalize_request(r, u, NGX_HTTP_BAD_GATEWAY);
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK"); return ngx_pq_result_handler(c->write);
+        default: return ngx_pq_connect_handler(c->write);
+    }
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
