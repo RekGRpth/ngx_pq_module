@@ -128,7 +128,6 @@ typedef struct {
 typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
-    ngx_int_t rc;
     ngx_msec_t timeout;
     PGconn *conn;
     struct {
@@ -1022,20 +1021,12 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (!s) return;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "s->rc = %i", s->rc);
-    if (s->rc >= NGX_HTTP_SPECIAL_RESPONSE) return (void)ngx_http_filter_finalize_request(r, NULL, s->rc);
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return (void)ngx_http_filter_finalize_request(r, NULL, rc);
     if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
     u->header_sent = 1;
-    ngx_chain_t *cl;
-    if (!(cl = u->out_bufs)) return (void)ngx_http_send_special(r, NGX_HTTP_LAST);
-    while (cl->next) cl = cl->next;
-    ngx_buf_t *b = cl->buf;
-    if (r == r->main && !r->post_action) b->last_buf = 1; else {
-        b->sync = 1;
-        b->last_in_chain = 1;
-    }
+    if (!u->out_bufs) return;
     if (ngx_http_output_filter(r, u->out_bufs) != NGX_OK) return;
     ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
 }
@@ -1069,7 +1060,10 @@ static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
     r->connection->log->action = "sending to client";
     if (!u->header_sent || rc == NGX_HTTP_REQUEST_TIME_OUT || rc == NGX_HTTP_CLIENT_CLOSED_REQUEST) return ngx_http_finalize_request(r, rc);
     ngx_uint_t flush = 0;
-    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) { rc = NGX_ERROR; flush = 1; }
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+        rc = NGX_ERROR;
+        flush = 1;
+    }
     if (r->header_only) return ngx_http_finalize_request(r, rc);
     if (rc == NGX_OK) {
         rc = ngx_http_send_special(r, NGX_HTTP_LAST);
@@ -1083,11 +1077,11 @@ static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
-    s->rc = NGX_AGAIN;
+    ngx_int_t rc = NGX_AGAIN;
     switch (PQstatus(s->conn)) {
         case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
         case CONNECTION_AWAITING_RESPONSE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AWAITING_RESPONSE"); break;
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); s->rc = NGX_HTTP_BAD_GATEWAY; goto ret;
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "CONNECTION_BAD"); rc = NGX_HTTP_BAD_GATEWAY; goto ret;
         case CONNECTION_CHECK_STANDBY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_STANDBY"); break;
         case CONNECTION_CHECK_TARGET: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_TARGET"); break;
         case CONNECTION_CHECK_WRITABLE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_WRITABLE"); break;
@@ -1095,15 +1089,15 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
         case CONNECTION_GSS_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_GSS_STARTUP"); break;
         case CONNECTION_MADE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_MADE"); break;
         case CONNECTION_NEEDED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_NEEDED"); break;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK"); s->rc = ngx_pq_result(s, d); goto ret;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK"); rc = ngx_pq_result(s, d); goto ret;
         case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
-    s->rc = ngx_pq_connect(s, d);
+    rc = ngx_pq_connect(s, d);
 ret:
-    if (s->rc == NGX_AGAIN) return;
-    ngx_pg_upstream_finalize_request(r, u, s->rc);
+    if (rc == NGX_AGAIN) return;
+    ngx_pg_upstream_finalize_request(r, u, rc);
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
