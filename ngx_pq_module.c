@@ -80,9 +80,13 @@ typedef struct {
 
 typedef struct {
     ngx_array_t options;
+} ngx_pq_connect_t;
+
+typedef struct {
     ngx_array_t queries;
     ngx_http_complex_value_t complex;
     ngx_http_upstream_conf_t upstream;
+    ngx_pq_connect_t connect;
 } ngx_pq_loc_conf_t;
 
 typedef struct {
@@ -106,10 +110,10 @@ typedef struct {
 } ngx_pq_query_t;
 
 typedef struct {
-    ngx_array_t options;
     ngx_array_t queries;
     ngx_http_upstream_peer_t peer;
     ngx_log_t *log;
+    ngx_pq_connect_t connect;
 } ngx_pq_srv_conf_t;
 
 typedef struct {
@@ -595,17 +599,17 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_t *u = r->upstream;
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
-    ngx_array_t *options = &plcf->options;
+    ngx_pq_connect_t *connect = &plcf->connect;
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
-        options = &pscf->options;
+        connect = &pscf->connect;
     }
     ngx_int_t rc = NGX_ERROR;
-    if (!(keywords = ngx_pcalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
-    if (!(values = ngx_pcalloc(r->pool, (options->nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
-    ngx_pq_option_t *option = options->elts;
+    if (!(keywords = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
+    if (!(values = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
+    ngx_pq_option_t *option = connect->options.elts;
     ngx_uint_t i;
-    for (i = 0; i < options->nelts; i++) {
+    for (i = 0; i < connect->options.nelts; i++) {
         keywords[i] = (const char *)option[i].key.data;
         values[i] = (const char *)option[i].val.data;
     }
@@ -1087,10 +1091,10 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     return NGX_DONE;
 }
 
-static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_array_t *options) {
-    if (options->elts) return "is duplicate";
+static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
+    if (connect->options.elts) return "is duplicate";
     ngx_pq_option_t *option;
-    if (ngx_array_init(options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
     ngx_str_t *str = cf->args->elts;
     ngx_flag_t application_name = 0;
     u_char *p;
@@ -1100,7 +1104,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_array_t *options) {
         else if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
         else if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = 1;
         else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = 1;
-        if (!(option = ngx_array_push(options))) return "!ngx_array_push";
+        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
         option->key.data = str[i].data;
@@ -1110,7 +1114,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_array_t *options) {
         option->val.len = str[i].len - option->key.len - 1;
     }
     if (!application_name) {
-        if (!(option = ngx_array_push(options))) return "!ngx_array_push";
+        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         ngx_str_set(&option->key, "application_name");
         ngx_str_set(&option->val, "nginx");
@@ -1120,7 +1124,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_array_t *options) {
 
 static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
-    return ngx_pq_option_loc_ups_conf(cf, &plcf->options);
+    return ngx_pq_option_loc_ups_conf(cf, &plcf->connect);
 }
 
 static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -1130,7 +1134,7 @@ static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
         pscf->peer.init_upstream = uscf->peer.init_upstream ? uscf->peer.init_upstream : ngx_http_upstream_init_round_robin;
         uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
     }
-    return ngx_pq_option_loc_ups_conf(cf, &pscf->options);
+    return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
 }
 
 static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -1146,7 +1150,7 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
         return NGX_CONF_OK;
     }
     ngx_url_t url = {0};
-    if (!plcf->options.elts) url.no_resolve = 1;
+    if (!plcf->connect.options.elts) url.no_resolve = 1;
     url.url = str[1];
     if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
     ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
