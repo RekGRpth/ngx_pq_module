@@ -129,7 +129,6 @@ typedef struct {
     ngx_int_t col;
     ngx_int_t row;
     ngx_queue_t queue;
-    PGnotify *notify;
     PGresult *res;
 } ngx_pq_result_t;
 
@@ -429,13 +428,13 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_OK;
     ngx_pool_t *p;
-    ngx_pq_result_t *result = &s->query;
+    PGnotify *notify;
     while (PQstatus(s->conn) == CONNECTION_OK) {
-        if (!(result->notify = PQnotifies(s->conn))) break;
-        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", result->notify->relname, result->notify->extra, result->notify->be_pid);
+        if (!(notify = PQnotifies(s->conn))) break;
+        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", notify->relname, notify->extra, notify->be_pid);
         if (!ngx_http_push_stream_add_msg_to_channel_my) goto cont;
-        ngx_str_t id = { ngx_strlen(result->notify->relname), (u_char *)result->notify->relname };
-        ngx_str_t text = { ngx_strlen(result->notify->extra), (u_char *)result->notify->extra };
+        ngx_str_t id = { ngx_strlen(notify->relname), (u_char *)notify->relname };
+        ngx_str_t text = { ngx_strlen(notify->extra), (u_char *)notify->extra };
         if (!(p = ngx_create_pool(4096 + id.len + text.len, s->connection->log))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_create_pool"); rc = NGX_ERROR; goto cont; }
         if (rc == NGX_OK) switch ((rc = ngx_http_push_stream_add_msg_to_channel_my(s->connection->log, &id, &text, NULL, NULL, 1, p))) {
             case NGX_ERROR: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_ERROR"); break;
@@ -468,7 +467,7 @@ term:
 destroy:
         ngx_destroy_pool(p);
 cont:
-        PQfreemem(result->notify);
+        PQfreemem(notify);
     }
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
     return rc;
