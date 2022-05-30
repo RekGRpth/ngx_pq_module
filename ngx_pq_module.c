@@ -140,6 +140,7 @@ typedef struct {
     } keep;
     struct {
         ngx_queue_t queue;
+        ngx_uint_t type;
     } query;
 } ngx_pq_save_t;
 
@@ -308,6 +309,7 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res)
     ngx_queue_remove(q);
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
+    s->query.type = query->type;
     if (query->output.header) {
 //        if (row > 0) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
         for (int col = 0; col < PQnfields(res); col++) {
@@ -353,6 +355,7 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_queue_t *q = ngx_queue_head(&s->query.queue);
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
+    s->query.type = query->type;
     char *buffer = NULL;
     int len;
     ngx_int_t rc = NGX_OK;
@@ -370,6 +373,9 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res)
     if (ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&s->query.queue);
     ngx_queue_remove(q);
+    ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+    ngx_pq_query_t *query = qq->query;
+    s->query.type = query->type;
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s", PQresStatus(PQresultStatus(res))); }
@@ -380,6 +386,9 @@ static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     if (ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&s->query.queue);
     ngx_queue_remove(q);
+    ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+    ngx_pq_query_t *query = qq->query;
+    s->query.type = query->type;
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s and %s not supported", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(res))); }
@@ -392,6 +401,7 @@ static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     ngx_queue_remove(q);
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
+    s->query.type = query->type;
     const char *value;
     size_t len = 0;
     if ((value = PQcmdStatus(res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(res)), value); }
@@ -561,7 +571,6 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
     ngx_int_t rc = NGX_OK;
-    ngx_uint_t type = 0;
     PGresult *res;
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(res = PQgetResult(s->conn))) if (!(res = PQgetResult(s->conn))) goto done;
@@ -581,7 +590,7 @@ done:
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (!ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
     if (!d) return rc;
-    if (rc == NGX_OK && type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
+    if (rc == NGX_OK && s->query.type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
     return rc;
 }
 
