@@ -470,6 +470,13 @@ cont:
     return rc;
 }
 
+static void ngx_pq_query_queue_cln_handler(void *data) {
+    ngx_pq_query_queue_t *qq = data;
+    ngx_http_request_t *r = qq->request;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    qq->request = NULL;
+}
+
 static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
     ngx_http_request_t *r = d->request;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
@@ -498,9 +505,13 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
     for (ngx_uint_t i = 0; i < queries->nelts; i++) {
         ngx_pq_query_queue_t *qq;
         if (!(qq = ngx_pcalloc(r->pool, sizeof(*qq)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); goto ret; }
-        ngx_queue_insert_tail(&s->query.queue, &qq->queue);
         qq->query = &query[i];
         qq->request = r;
+        ngx_pool_cleanup_t *cln;
+        if (!(cln = ngx_pool_cleanup_add(r->pool, 0))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pool_cleanup_add"); goto ret; }
+        cln->data = qq;
+        cln->handler = ngx_pq_query_queue_cln_handler;
+        ngx_queue_insert_tail(&s->query.queue, &qq->queue);
         ngx_pq_argument_t *argument = query[i].arguments.elts;
         if (!(qq->paramTypes = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); goto ret; }
         if (!(qq->paramValues = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); goto ret; }
