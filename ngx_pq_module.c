@@ -572,31 +572,32 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
     ngx_int_t rc = NGX_OK;
+    ngx_pq_result_t *result = &s->query;
     while (PQstatus(s->conn) == CONNECTION_OK) {
-        if (!(s->query.res = PQgetResult(s->conn))) if (!(s->query.res = PQgetResult(s->conn))) goto done;
-        if (d && !ngx_queue_empty(&s->query.queue)) {
-            ngx_queue_t *q = ngx_queue_head(&s->query.queue);
+        if (!(result->res = PQgetResult(s->conn))) if (!(result->res = PQgetResult(s->conn))) goto done;
+        if (!ngx_queue_empty(&result->queue)) {
+            ngx_queue_t *q = ngx_queue_head(&result->queue);
             ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-            s->query.cur = qq->query;
+            result->cur = qq->query;
         }
-        switch (PQresultStatus(s->query.res)) {
+        switch (PQresultStatus(result->res)) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
             case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
-            case PGRES_PIPELINE_SYNC: (void)ngx_pq_sync(s, d); PQclear(s->query.res); goto done;
+            case PGRES_PIPELINE_SYNC: (void)ngx_pq_sync(s, d); PQclear(result->res); goto done;
             case PGRES_TUPLES_OK: if (rc == NGX_OK) rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
-        if (rc == NGX_OK && d && s->query.cur && s->query.cur->output.type && !s->query.row) if (ngx_pq_output(s, d, (const u_char *)PQcmdStatus(s->query.res), ngx_strlen(PQcmdStatus(s->query.res))) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
-        PQclear(s->query.res);
+        if (rc == NGX_OK && d && result->cur && result->cur->output.type && !result->row) if (ngx_pq_output(s, d, (const u_char *)PQcmdStatus(result->res), ngx_strlen(PQcmdStatus(result->res))) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        PQclear(result->res);
     }
 done:
-    if ((s->query.res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQgetResult"); return NGX_HTTP_BAD_GATEWAY; }
+    if ((result->res = PQgetResult(s->conn))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQgetResult"); return NGX_HTTP_BAD_GATEWAY; }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (!d) return rc;
-    if (!ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
-    if (rc == NGX_OK && s->query.cur && s->query.cur->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
+    if (!ngx_queue_empty(&result->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
+    if (rc == NGX_OK && result->cur && result->cur->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
     return rc;
 }
 
