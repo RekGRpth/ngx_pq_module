@@ -80,6 +80,7 @@ typedef struct {
 
 typedef struct {
     ngx_array_t options;
+    ngx_msec_t timeout;
 } ngx_pq_connect_t;
 
 typedef struct {
@@ -604,6 +605,7 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
         connect = &pscf->connect;
     }
+    plcf->upstream.connect_timeout = connect->timeout;
     ngx_int_t rc = NGX_ERROR;
     if (!(keywords = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
     if (!(values = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
@@ -1095,15 +1097,14 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     if (connect->options.elts) return "is duplicate";
     ngx_pq_option_t *option;
     if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    ngx_str_t application_name = ngx_null_string;
+    ngx_str_t connect_timeout = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
-    ngx_flag_t application_name = 0;
     u_char *p;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
-        else if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
-        else if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
-        else if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = 1;
-        else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = 1;
+        if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
+        if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
@@ -1112,12 +1113,25 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         option->key.data[option->key.len] = '\0';
         option->val.data = str[i].data + option->key.len + 1;
         option->val.len = str[i].len - option->key.len - 1;
+        if (option->key.len == sizeof("application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"application_name", sizeof("application_name") - 1)) application_name = option->val;
+        else if (option->key.len == sizeof("fallback_application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"fallback_application_name", sizeof("fallback_application_name") - 1)) application_name = option->val;
+        else if (option->key.len == sizeof("connect_timeout") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"connect_timeout", sizeof("connect_timeout") - 1)) connect_timeout = option->val;
     }
-    if (!application_name) {
+    if (!application_name.data) {
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         ngx_str_set(&option->key, "application_name");
         ngx_str_set(&option->val, "nginx");
+    }
+    if (connect_timeout.data) {
+        ngx_int_t n = ngx_parse_time(&connect_timeout, 0);
+        if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
+        connect->timeout = (ngx_msec_t)(n * 1000);
+    } else {
+        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
+        ngx_memzero(option, sizeof(*option));
+        ngx_str_set(&option->key, "connect_timeout");
+        ngx_str_set(&option->val, "60");
     }
     return NGX_CONF_OK;
 }
