@@ -1124,7 +1124,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         ngx_str_set(&option->val, "nginx");
     }
     if (connect_timeout.data) {
-        ngx_int_t n = ngx_parse_time(&connect_timeout, 1);
+        ngx_int_t n = ngx_parse_time(&connect_timeout, 0);
         if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
         connect->timeout = (ngx_msec_t)n;
     } else {
