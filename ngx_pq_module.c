@@ -141,16 +141,16 @@ typedef struct {
         void *data;
     } keep;
     struct {
+        ngx_int_t col;
+        ngx_int_t row;
+        ngx_pq_query_t *cur;
         ngx_queue_t queue;
     } query;
 } ngx_pq_save_t;
 
 typedef struct {
     ngx_http_request_t *request;
-    ngx_int_t col;
-    ngx_int_t row;
     ngx_peer_connection_t peer;
-    ngx_pq_query_t *query;
     ngx_pq_save_t *save;
 } ngx_pq_data_t;
 
@@ -266,7 +266,7 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, const u_char 
     ngx_http_request_t *r = d->request;
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%*s", (int)len, data);
     if (!len) return NGX_OK;
-    ngx_pq_query_t *query = d->query;
+    ngx_pq_query_t *query = s->query.cur;
     if (query->type & ngx_pq_type_upstream) {
         if (query->output.index) {
             ngx_pq_variable_t *variable = s->variables.elts;
@@ -315,14 +315,14 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         ngx_queue_t *q = ngx_queue_head(&s->query.queue);
         ngx_queue_remove(q);
     }
-    if (!d || !d->query) return NGX_OK;
-    ngx_pq_query_t *query = d->query;
+    if (!d || !s->query.cur) return NGX_OK;
+    ngx_pq_query_t *query = s->query.cur;
     if (query->output.header) {
-        if (d->row > 0) if (ngx_pq_output(s, d, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
-        for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-            if (d->col > 0) if (ngx_pq_output(s, d, &query->output.delimiter, sizeof(query->output.delimiter)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        if (s->query.row > 0) if (ngx_pq_output(s, d, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        for (s->query.col = 0; s->query.col < PQnfields(s->res); s->query.col++) {
+            if (s->query.col > 0) if (ngx_pq_output(s, d, &query->output.delimiter, sizeof(query->output.delimiter)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
             if (query->output.string && query->output.quote) if (ngx_pq_output(s, d, &query->output.quote, sizeof(query->output.quote)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
-            const u_char *data = (const u_char *)PQfname(s->res, d->col);
+            const u_char *data = (const u_char *)PQfname(s->res, s->query.col);
             ngx_uint_t len = ngx_strlen(data);
             if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
                 if (data[k] == query->output.quote) if (ngx_pq_output(s, d, &query->output.escape, sizeof(query->output.escape)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -333,16 +333,16 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             if (query->output.string && query->output.quote) if (ngx_pq_output(s, d, &query->output.quote, sizeof(query->output.quote)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
     }
-    for (d->row = 0; d->row < PQntuples(s->res); d->row++) {
-        if (d->row > 0 || query->output.header) if (ngx_pq_output(s, d, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
-        for (d->col = 0; d->col < PQnfields(s->res); d->col++) {
-            if (d->col > 0) if (ngx_pq_output(s, d, &query->output.delimiter, sizeof(query->output.delimiter)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
-            if (PQgetisnull(s->res, d->row, d->col)) {
+    for (s->query.row = 0; s->query.row < PQntuples(s->res); s->query.row++) {
+        if (s->query.row > 0 || query->output.header) if (ngx_pq_output(s, d, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+        for (s->query.col = 0; s->query.col < PQnfields(s->res); s->query.col++) {
+            if (s->query.col > 0) if (ngx_pq_output(s, d, &query->output.delimiter, sizeof(query->output.delimiter)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+            if (PQgetisnull(s->res, s->query.row, s->query.col)) {
                 if (query->output.null.len) if (ngx_pq_output(s, d, query->output.null.data, query->output.null.len) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
             } else {
                 if (query->output.string && query->output.quote) if (ngx_pq_output(s, d, &query->output.quote, sizeof(query->output.quote)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
-                const u_char *data = (const u_char *)PQgetvalue(s->res, d->row, d->col);
-                ngx_uint_t len = PQgetlength(s->res, d->row, d->col);
+                const u_char *data = (const u_char *)PQgetvalue(s->res, s->query.row, s->query.col);
+                ngx_uint_t len = PQgetlength(s->res, s->query.row, s->query.col);
                 if (query->output.string && query->output.quote && query->output.escape) for (ngx_uint_t k = 0; k < len; k++) {
                     if (data[k] == query->output.quote) if (ngx_pq_output(s, d, &query->output.escape, sizeof(query->output.escape)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
                     if (ngx_pq_output(s, d, &data[k], sizeof(data[k])) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
@@ -358,7 +358,7 @@ static ngx_int_t ngx_pq_tuple(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 
 static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT"); 
-    if (!d || !d->query) return NGX_OK;
+    if (!d || !s->query.cur) return NGX_OK;
     char *buffer = NULL;
     int len;
     ngx_int_t rc = NGX_OK;
@@ -366,7 +366,7 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         case 0: break;
         case -1: break;
         case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
-        default: d->row++; if (ngx_pq_output(s, d, (const u_char *)buffer, len) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
+        default: s->query.row++; if (ngx_pq_output(s, d, (const u_char *)buffer, len) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
     }
     if (buffer) PQfreemem(buffer);
     return rc;
@@ -408,8 +408,8 @@ static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     size_t len = 0;
     if ((value = PQcmdStatus(s->res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(s->res)), value); }
     else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(s->res))); }
-    if (ngx_http_push_stream_delete_channel_my && d && d->query && d->query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
-        ngx_pq_command_t *command = d->query->commands.elts;
+    if (ngx_http_push_stream_delete_channel_my && d && s->query.cur && s->query.cur->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
+        ngx_pq_command_t *command = s->query.cur->commands.elts;
         command = &command[1];
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%V", &command->str);
         ngx_connection_t *c = s->connection;
@@ -577,7 +577,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         if (d && !ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
             ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-            d->query = qq->query;
+            s->query.cur = qq->query;
         }
         switch (PQresultStatus(s->res)) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
@@ -587,7 +587,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             case PGRES_TUPLES_OK: if (rc == NGX_OK) rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
-        if (rc == NGX_OK && d && d->query && d->query->output.type && !d->row) if (ngx_pq_output(s, d, (const u_char *)PQcmdStatus(s->res), ngx_strlen(PQcmdStatus(s->res))) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+        if (rc == NGX_OK && d && s->query.cur && s->query.cur->output.type && !s->query.row) if (ngx_pq_output(s, d, (const u_char *)PQcmdStatus(s->res), ngx_strlen(PQcmdStatus(s->res))) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
         PQclear(s->res);
     }
 done:
@@ -596,7 +596,7 @@ done:
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (!d) return rc;
     if (!ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
-    if (rc == NGX_OK && d->query && d->query->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
+    if (rc == NGX_OK && s->query.cur && s->query.cur->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
     return rc;
 }
 
