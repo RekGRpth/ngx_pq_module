@@ -372,13 +372,11 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 }
 
 static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    if (d && !ngx_queue_empty(&s->query.queue)) {
-        ngx_queue_t *q = ngx_queue_head(&s->query.queue);
-        ngx_queue_remove(q);
-    }
+    ngx_pq_result_t *result = &s->query;
+    ngx_queue_remove(&result->queue);
     const char *value;
-    if ((value = PQcmdStatus(s->query.res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->query.res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(s->query.res)), value); }
-    else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(s->query.res), "PQresultStatus == %s", PQresStatus(PQresultStatus(s->query.res))); }
+    if ((value = PQcmdStatus(result->res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(result->res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(result->res)), value); }
+    else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(result->res), "PQresultStatus == %s", PQresStatus(PQresultStatus(result->res))); }
     return NGX_HTTP_BAD_GATEWAY;
 }
 
