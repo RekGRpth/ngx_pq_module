@@ -169,7 +169,6 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     conf->upstream.pass_request_body = NGX_CONF_UNSET;
     conf->upstream.read_timeout = NGX_CONF_UNSET_MSEC;
     conf->upstream.request_buffering = NGX_CONF_UNSET;
-    conf->upstream.send_timeout = NGX_CONF_UNSET_MSEC;
     ngx_str_set(&conf->upstream.module, "pq");
     return conf;
 }
@@ -180,7 +179,6 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     if (!conf->upstream.upstream) conf->upstream = prev->upstream;
     ngx_conf_merge_msec_value(conf->upstream.connect_timeout, prev->upstream.connect_timeout, 60000);
     ngx_conf_merge_msec_value(conf->upstream.read_timeout, prev->upstream.read_timeout, 60000);
-    ngx_conf_merge_msec_value(conf->upstream.send_timeout, prev->upstream.send_timeout, 60000);
     ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
     ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
     return NGX_CONF_OK;
@@ -1250,7 +1248,6 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_pass_request_body"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.pass_request_body), NULL },
   { ngx_string("pq_read_timeout"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_msec_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.read_timeout), NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
-  { ngx_string("pq_send_timeout"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_msec_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.send_timeout), NULL },
     ngx_null_command
 };
 
