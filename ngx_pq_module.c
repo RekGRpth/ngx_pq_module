@@ -419,12 +419,13 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_OK;
     ngx_pool_t *p;
+    ngx_pq_result_t *result = &s->query;
     while (PQstatus(s->conn) == CONNECTION_OK) {
-        if (!(s->query.notify = PQnotifies(s->conn))) break;
-        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", s->query.notify->relname, s->query.notify->extra, s->query.notify->be_pid);
+        if (!(result->notify = PQnotifies(s->conn))) break;
+        ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", result->notify->relname, result->notify->extra, result->notify->be_pid);
         if (!ngx_http_push_stream_add_msg_to_channel_my) goto cont;
-        ngx_str_t id = { ngx_strlen(s->query.notify->relname), (u_char *)s->query.notify->relname };
-        ngx_str_t text = { ngx_strlen(s->query.notify->extra), (u_char *)s->query.notify->extra };
+        ngx_str_t id = { ngx_strlen(result->notify->relname), (u_char *)result->notify->relname };
+        ngx_str_t text = { ngx_strlen(result->notify->extra), (u_char *)result->notify->extra };
         if (!(p = ngx_create_pool(4096 + id.len + text.len, s->connection->log))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_create_pool"); rc = NGX_ERROR; goto cont; }
         if (rc == NGX_OK) switch ((rc = ngx_http_push_stream_add_msg_to_channel_my(s->connection->log, &id, &text, NULL, NULL, 1, p))) {
             case NGX_ERROR: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_ERROR"); break;
@@ -457,7 +458,7 @@ term:
 destroy:
         ngx_destroy_pool(p);
 cont:
-        PQfreemem(s->query.notify);
+        PQfreemem(result->notify);
     }
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
     return rc;
