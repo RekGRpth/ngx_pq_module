@@ -563,6 +563,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
     ngx_int_t rc = NGX_OK;
     ngx_pq_result_t *result = &s->query;
+    ngx_uint_t type = 0;
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(result->res = PQgetResult(s->conn))) if (!(result->res = PQgetResult(s->conn))) goto done;
         if (!ngx_queue_empty(&result->queue)) {
@@ -570,7 +571,8 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             ngx_queue_remove(q);
             ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
             result->cur = qq->query;
-        }
+            type = result->cur->type;
+        } else result->cur = NULL;
         switch (PQresultStatus(result->res)) {
             case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
             case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); goto clear;
@@ -589,7 +591,7 @@ done:
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (!ngx_queue_empty(&result->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
     if (!d) return rc;
-    if (rc == NGX_OK && result->cur && result->cur->type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
+    if (rc == NGX_OK && type & ngx_pq_type_upstream) return ngx_pq_queries(d, ngx_pq_type_location);
     return rc;
 }
 
