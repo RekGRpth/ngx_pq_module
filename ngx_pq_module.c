@@ -581,11 +581,11 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     while (PQstatus(s->conn) == CONNECTION_OK) {
         if (!(result->res = PQgetResult(s->conn))) if (!(result->res = PQgetResult(s->conn))) goto done;
         switch (PQresultStatus(result->res)) {
-            case PGRES_COMMAND_OK: if (rc == NGX_OK) rc = ngx_pq_command(s, d); break;
-            case PGRES_COPY_OUT: if (rc == NGX_OK) rc = ngx_pq_copy(s, d); break;
+            case PGRES_COMMAND_OK: rc = ngx_pq_command(s, d); break;
+            case PGRES_COPY_OUT: rc = ngx_pq_copy(s, d); break;
             case PGRES_FATAL_ERROR: rc = ngx_pq_error(s, d); break;
             case PGRES_PIPELINE_SYNC: (void)ngx_pq_sync(s, d); PQclear(result->res); goto done;
-            case PGRES_TUPLES_OK: if (rc == NGX_OK) rc = ngx_pq_tuple(s, d); break;
+            case PGRES_TUPLES_OK: rc = ngx_pq_tuple(s, d); break;
             default: rc = ngx_pq_default(s, d); break;
         }
         PQclear(result->res);
