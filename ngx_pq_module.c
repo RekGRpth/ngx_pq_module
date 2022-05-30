@@ -1124,14 +1124,15 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         ngx_str_set(&option->val, "nginx");
     }
     if (connect_timeout.data) {
-        ngx_int_t n = ngx_parse_time(&connect_timeout, 0);
+        ngx_int_t n = ngx_parse_time(&connect_timeout, 1);
         if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
-        connect->timeout = (ngx_msec_t)(n * 1000);
+        connect->timeout = (ngx_msec_t)n;
     } else {
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         ngx_str_set(&option->key, "connect_timeout");
         ngx_str_set(&option->val, "60");
+        connect->timeout = 60 * 1000;
     }
     return NGX_CONF_OK;
 }
