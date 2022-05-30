@@ -1059,18 +1059,8 @@ static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_ups
     if (rc == NGX_DECLINED) return;
     r->connection->log->action = "sending to client";
     if (!u->header_sent || rc == NGX_HTTP_REQUEST_TIME_OUT || rc == NGX_HTTP_CLIENT_CLOSED_REQUEST) return ngx_http_finalize_request(r, rc);
-    ngx_uint_t flush = 0;
-    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
-        rc = NGX_ERROR;
-        flush = 1;
-    }
     if (r->header_only) return ngx_http_finalize_request(r, rc);
-    if (rc == NGX_OK) {
-        rc = ngx_http_send_special(r, NGX_HTTP_LAST);
-    } else if (flush) {
-        r->keepalive = 0;
-        rc = ngx_http_send_special(r, NGX_HTTP_FLUSH);
-    }
+    if (rc == NGX_OK) rc = ngx_http_send_special(r, NGX_HTTP_LAST);
     ngx_http_finalize_request(r, rc);
 }
 
