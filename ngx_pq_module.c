@@ -57,11 +57,11 @@ enum {
 
 typedef struct {
     struct {
-        ngx_int_t index;
+        ngx_http_complex_value_t complex;
         Oid value;
     } oid;
     struct {
-        ngx_int_t index;
+        ngx_http_complex_value_t complex;
         ngx_str_t str;
     } value;
 } ngx_pq_argument_t;
@@ -93,7 +93,7 @@ typedef struct {
     ngx_array_t commands;
     ngx_uint_t type;
     struct {
-        ngx_int_t index;
+        ngx_http_complex_value_t complex;
         ngx_str_t str;
     } name;
     struct {
@@ -481,21 +481,20 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         if (!(qq->paramValues = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pcalloc"); goto ret; }
         for (ngx_uint_t j = 0; j < query[i].arguments.nelts; j++) {
             if (query[i].type & (ngx_pq_type_query|ngx_pq_type_prepare)) {
-                if (argument[j].oid.index) {
-                    ngx_http_variable_value_t *value;
-                    if (!(value = ngx_http_get_indexed_variable(r, argument[j].oid.index))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
-                    ngx_int_t n = ngx_atoi(value->data, value->len);
+                if (argument[j].oid.complex.value.data) {
+                    ngx_str_t value;
+                    if (ngx_http_complex_value(r, &argument[j].oid.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto ret; }
+                    ngx_int_t n = ngx_atoi(value.data, value.len);
                     if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_atoi == NGX_ERROR"); goto ret; }
                     argument[j].oid.value = n;
                 }
                 qq->paramTypes[j] = argument[j].oid.value;
             }
             if (query[i].type & (ngx_pq_type_query|ngx_pq_type_execute)) {
-                if (argument[j].value.index) {
-                    ngx_http_variable_value_t *value;
-                    if (!(value = ngx_http_get_indexed_variable(r, argument[j].value.index))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
-                    argument[j].value.str.data = value->data;
-                    argument[j].value.str.len = value->len;
+                if (argument[j].value.complex.value.data) {
+                    ngx_str_t value;
+                    if (ngx_http_complex_value(r, &argument[j].value.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto ret; }
+                    argument[j].value.str = value;
                 }
                 if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len + 1))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
                 (void)ngx_cpystrn(qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len + 1);
@@ -517,10 +516,10 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryParams('%s')", sql.data);
         } else {
             resetPQExpBuffer(&name);
-            if (query[i].name.index) {
-                ngx_http_variable_value_t *value;
-                if (!(value = ngx_http_get_indexed_variable(r, query[i].name.index))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
-                appendBinaryPQExpBuffer(&name, (const char *)value->data, value->len);
+            if (query[i].name.complex.value.data) {
+                ngx_str_t value;
+                if (ngx_http_complex_value(r, &query[i].name.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto ret; }
+                appendBinaryPQExpBuffer(&name, (const char *)value.data, value.len);
             } else appendBinaryPQExpBuffer(&name, (const char *)query[i].name.str.data, query[i].name.str.len);
             if (PQExpBufferDataBroken(name)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); goto ret; }
             if (query[i].type & ngx_pq_type_prepare) {
@@ -832,17 +831,15 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             }
         } else if (query->type & ngx_pq_type_prepare) oid = value;
         if (!(query->type & ngx_pq_type_prepare)) {
-            if (value.data[0] == '$') {
-                value.data++;
-                value.len--;
-                if ((argument->value.index = ngx_http_get_variable_index(cf, &value)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            if (ngx_http_script_variables_count(&value)) {
+                ngx_http_compile_complex_value_t ccv = {cf, &value, &argument->value.complex, 0, 0, 0};
+                if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
             } else argument->value.str = value;
         }
         if (!oid.len) continue;
-        if (oid.data[0] == '$') {
-            oid.data++;
-            oid.len--;
-            if ((argument->oid.index = ngx_http_get_variable_index(cf, &oid)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+        if (ngx_http_script_variables_count(&oid)) {
+            ngx_http_compile_complex_value_t ccv = {cf, &oid, &argument->oid.complex, 0, 0, 0};
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
         } else {
             ngx_int_t n = ngx_atoi(oid.data, oid.len);
             if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
@@ -858,10 +855,9 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
     ngx_memzero(query, sizeof(*query));
     ngx_str_t *str = cf->args->elts;
-    if (str[1].data[0] == '$') {
-        str[1].data++;
-        str[1].len--;
-        if ((query->name.index = ngx_http_get_variable_index(cf, &str[1])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+    if (ngx_http_script_variables_count(&str[1])) {
+        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &query->name.complex, 0, 0, 0};
+        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
     } else query->name.str = str[1];
     query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, query);
@@ -1192,10 +1188,9 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
     ngx_uint_t i = 1;
     query->type = cmd->offset;
     if (query->type & ngx_pq_type_prepare) {
-        if (str[i].data[0] == '$') {
-            str[i].data++;
-            str[i].len--;
-            if ((query->name.index = ngx_http_get_variable_index(cf, &str[i])) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+        if (ngx_http_script_variables_count(&str[i])) {
+            ngx_http_compile_complex_value_t ccv = {cf, &str[i], &query->name.complex, 0, 0, 0};
+            if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
         } else query->name.str = str[i];
         i++;
     }
