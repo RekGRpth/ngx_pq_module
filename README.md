@@ -4,15 +4,18 @@
 
 pq_execute
 -------------
-* Syntax: **pq_execute** *$query* [ *$arg* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
+* Syntax: **pq_execute** *$query_name* [ *$argument_value* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
 * Default: --
 * Context: location, if in location, upstream
 
-Executes query(queries) (nginx variables allowed) sql(s) (named only nginx variables allowed as identifier only), optional argument(s) (nginx variables allowed) and output type (no nginx variables allowed):
+Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value (no nginx variables allowed) or $variable (create nginx variable) for execute:
 ```nginx
 location =/postgres {
     pq_pass postgres; # upstream is postgres
-    pq_execute $query str $arg output=plain; # execute extended query wich name is taken from $query variable with two arguments: first query argument is str and second query argument is taken from $arg variable and plain output type
+    pq_execute $query string $argument output=$variable; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and output to $variable variable
+    pq_execute $query string $argument output=csv; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and csv output type
+    pq_execute $query string $argument output=plain; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and plain output type
+    pq_execute $query string $argument output=value; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and value output type
 }
 ```
 pq_log
@@ -24,6 +27,7 @@ pq_log
 Sets logging (used when keepalive):
 ```nginx
 upstream postgres {
+    keepalive 8;
     pq_log /var/log/nginx/pg.err info; # set log level
 }
 ```
