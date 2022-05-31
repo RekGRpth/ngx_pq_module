@@ -37,7 +37,7 @@ pq_option
 * Default: --
 * Context: location, if in location, upstream
 
-Sets connection option(s) (no nginx variables allowed), can be several:
+Sets connection options with name (no nginx variables allowed) and value (no nginx variables allowed):
 ```nginx
 upstream postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
@@ -46,7 +46,7 @@ upstream postgres {
 # or
 upstream postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    server unix:/run/postgresql:5432; # unix socket connetion
+    server unix:/run/postgresql:5432; # unix socket connection and port is 5432
 }
 # or
 location =/postgres {
@@ -56,7 +56,7 @@ location =/postgres {
 # or
 location =/postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    pq_pass unix:/run/postgresql:5432; # unix socket connetion
+    pq_pass unix:/run/postgresql:5432; # unix socket connection
 }
 ```
 In upstream also may use nginx keepalive module:
@@ -70,7 +70,7 @@ upstream postgres {
 upstream postgres {
     keepalive 8;
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    server unix:/run/postgresql:5432; # unix socket connetion
+    server unix:/run/postgresql:5432; # unix socket connection
 }
 ```
 pq_prepare
