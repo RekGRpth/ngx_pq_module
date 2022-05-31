@@ -79,6 +79,7 @@ typedef struct {
 typedef struct {
     ngx_array_t options;
     ngx_msec_t timeout;
+    PGContextVisibility show_context;
     PGVerbosity verbosity;
 } ngx_pq_connect_t;
 
@@ -652,6 +653,7 @@ found:
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "CONNECTION_BAD"); goto finish; }
+    (void)PQsetErrorContextVisibility(conn, connect->show_context);
     (void)PQsetErrorVerbosity(conn, connect->verbosity);
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     int fd;
@@ -1131,11 +1133,22 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     ngx_str_t connect_timeout = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
     u_char *p;
+    connect->show_context = PQSHOW_CONTEXT_ERRORS;
     connect->verbosity = PQERRORS_DEFAULT;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
         if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
+        if (str[i].len > sizeof("context_visibility=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"context_visibility=", sizeof("context_visibility=") - 1)) {
+            str[i].data += sizeof("context_visibility=") - 1;
+            str[i].len -= sizeof("context_visibility=") - 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("always"), PQSHOW_CONTEXT_ALWAYS }, { ngx_string("errors"), PQSHOW_CONTEXT_ERRORS }, { ngx_string("never"), PQSHOW_CONTEXT_NEVER }, { ngx_null_string, 0 } };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
+            if (!e[j].name.len) return "\"context_visibility\" value must be \"always\", \"errors\", or \"never\"";
+            connect->show_context = e[j].value;
+            continue;
+        }
         if (str[i].len > sizeof("error_verbosity=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"error_verbosity=", sizeof("error_verbosity=") - 1)) {
             str[i].data += sizeof("error_verbosity=") - 1;
             str[i].len -= sizeof("error_verbosity=") - 1;
