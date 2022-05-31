@@ -1,25 +1,11 @@
-#include <ngx_http.h>
+#include <internal/c.h>
+#include <internal/pqexpbuffer.h>
 #include <libpq-events.h>
 #include <libpq-fe.h>
+#include <ngx_http.h>
 
 extern ngx_int_t ngx_http_push_stream_add_msg_to_channel_my(ngx_log_t *log, ngx_str_t *id, ngx_str_t *text, ngx_str_t *event_id, ngx_str_t *event_type, ngx_flag_t store_messages, ngx_pool_t *temp_pool) __attribute__((weak));
 extern ngx_int_t ngx_http_push_stream_delete_channel_my(ngx_log_t *log, ngx_str_t *id, u_char *text, size_t len, ngx_pool_t *temp_pool) __attribute__((weak));
-
-#define PQExpBufferDataBroken(buf) ((buf).maxlen == 0)
-
-typedef struct PQExpBufferData {
-    char *data;
-    size_t len;
-    size_t maxlen;
-} PQExpBufferData;
-
-typedef PQExpBufferData *PQExpBuffer;
-
-extern void appendBinaryPQExpBuffer(PQExpBuffer str, const char *data, size_t datalen);
-extern void appendPQExpBufferStr(PQExpBuffer str, const char *data);
-extern void initPQExpBuffer(PQExpBuffer str);
-extern void resetPQExpBuffer(PQExpBuffer str);
-extern void termPQExpBuffer(PQExpBuffer str);
 
 typedef struct {
     char *message;
