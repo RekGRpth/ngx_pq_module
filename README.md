@@ -8,14 +8,20 @@ pq_execute
 * Default: --
 * Context: location, if in location, upstream
 
-Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value (no nginx variables allowed) or $variable (create nginx variable) for execute:
+Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value (location only, no nginx variables allowed) or $variable (create nginx variable) for execute:
 ```nginx
 location =/postgres {
-    pq_pass postgres; # upstream is postgres
-    pq_execute $query string $argument output=$variable; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and output to $variable variable
-    pq_execute $query string $argument output=csv; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and csv output type
     pq_execute $query string $argument output=plain; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and plain output type
     pq_execute $query string $argument output=value; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and value output type
+    pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
+    pq_pass postgres; # upstream is postgres
+}
+# or
+upstream postgres {
+    pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
+    pq_execute $query string $argument output=$variable; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and output to $variable variable
+    pq_execute $query string $argument; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable)
+    server postgres:5432; # host is postgres and port is 5432
 }
 ```
 pq_log
@@ -46,7 +52,7 @@ upstream postgres {
 # or
 upstream postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    server unix:/run/postgresql:5432; # unix socket connection and port is 5432
+    server unix:/run/postgresql:5432; # unix socket is in /run/postgresql directory and port is 5432
 }
 # or
 location =/postgres {
@@ -56,7 +62,7 @@ location =/postgres {
 # or
 location =/postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    pq_pass unix:/run/postgresql:5432; # unix socket connection and port is 5432
+    pq_pass unix:/run/postgresql:5432; # unix socket is in /run/postgresql directory and port is 5432
 }
 ```
 In upstream also may use nginx keepalive module:
@@ -70,25 +76,25 @@ upstream postgres {
 upstream postgres {
     keepalive 8;
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    server unix:/run/postgresql:5432; # unix socket connection and port is 5432
+    server unix:/run/postgresql:5432; # unix socket is in /run/postgresql directory and port is 5432
 }
 ```
 pq_prepare
 -------------
-* Syntax: **pq_prepare** *$query* *sql* [ *$oid* ]
+* Syntax: **pq_prepare** *$query_name* *sql* [ *$argument_oid* ]
 * Default: --
 * Context: location, if in location, upstream
 
-Prepare query(queries) (nginx variables allowed) sql(s) (named only nginx variables allowed as identifier only), optional argument(s)'s oid(s) (nginx variables allowed):
+Sets $query_name (nginx variables allowed), sql (named only nginx variables allowed as identifier only) and optional (several) $argument_oid (nginx variables allowed) for prepare:
 ```nginx
 location =/postgres {
     pq_pass postgres; # upstream is postgres
-    pq_prepare $query "SELECT $1, $2::text" 25 ""; # parser query wich name is taken from $query variable and two arguments: first query argument oid is 25 (TEXTOID) and second query argument is auto oid
+    pq_prepare $query "SELECT $1, $2::text" 25 ""; # prepare query with name $query and two arguments (first query argument oid is 25 (TEXTOID) and second query argument is auto oid)
 }
 # or
 upstream postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    pq_prepare $query "SELECT $1, $2::text" 25 ""; # parser query wich name is taken from $query variable and two arguments: first query argument oid is 25 (TEXTOID) and second query argument is auto oid
+    pq_prepare $query "SELECT $1, $2::text" 25 ""; # prepare query with name $query and two arguments (first query argument oid is 25 (TEXTOID) and second query argument is auto oid)
     server postgres:5432; # host is postgres and port is 5432
 }
 ```
