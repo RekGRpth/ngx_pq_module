@@ -473,7 +473,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
         if (!(qq->paramTypes = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); goto ret; }
         if (!(qq->paramValues = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); goto ret; }
         for (ngx_uint_t j = 0; j < query[i].arguments.nelts; j++) {
-            if (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_prepare) {
+            if (query[i].type & (ngx_pq_type_query|ngx_pq_type_prepare)) {
                 if (argument[j].oid.index) {
                     ngx_http_variable_value_t *value;
                     if (!(value = ngx_http_get_indexed_variable(r, argument[j].oid.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
@@ -483,7 +483,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
                 }
                 qq->paramTypes[j] = argument[j].oid.value;
             }
-            if (query[i].type & ngx_pq_type_query || query[i].type & ngx_pq_type_execute) {
+            if (query[i].type & (ngx_pq_type_query|ngx_pq_type_execute)) {
                 if (argument[j].value.index) {
                     ngx_http_variable_value_t *value;
                     if (!(value = ngx_http_get_indexed_variable(r, argument[j].value.index))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
@@ -519,8 +519,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_data_t *d, ngx_uint_t type) {
             if (query[i].type & ngx_pq_type_prepare) {
                 if (!PQsendPrepare(s->conn, name.data, sql.data, query[i].arguments.nelts, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendPrepare"); rc = NGX_HTTP_BAD_GATEWAY; goto ret; }
                 ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "PQsendPrepare('%s', '%s')", name.data, sql.data);
-            }
-            if (query[i].type & ngx_pq_type_execute) {
+            } else if (query[i].type & ngx_pq_type_execute) {
                 if (!PQsendQueryPrepared(s->conn, name.data, query[i].arguments.nelts, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryPrepared"); rc = NGX_HTTP_BAD_GATEWAY; goto ret; }
                 ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "PQsendQueryPrepared('%s')", name.data);
             }
@@ -755,6 +754,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             continue;
         }
         if (str[i].len > sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (str[i].data[sizeof("output=") - 1] == '$' && query->type & ngx_pq_type_upstream) {
                 ngx_str_t name = str[i];
                 name.data += sizeof("output=") - 1 + 1;
@@ -766,7 +766,6 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
                 variable->data = query->output.index;
                 continue;
             }
-            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_csv }, { ngx_string("plain"), ngx_pq_output_plain }, { ngx_string("value"), ngx_pq_output_value }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
