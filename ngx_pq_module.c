@@ -597,6 +597,11 @@ static ngx_int_t ngx_pq_connect(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return NGX_AGAIN;
 }
 
+static void ngx_pq_notice_processor(void *arg, const char *message) {
+    ngx_log_t *log = arg;
+    ngx_pq_log_error(NGX_LOG_NOTICE, log, 0, message, "PGRES_NONFATAL_ERROR");
+}
+
 static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     const char **keywords;
@@ -648,6 +653,7 @@ found:
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "CONNECTION_BAD"); goto finish; }
     (void)PQsetErrorContextVisibility(conn, connect->show_context);
     (void)PQsetErrorVerbosity(conn, connect->errors);
+    (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, pc->log);
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     int fd;
     if ((fd = PQsocket(conn)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket < 0"); goto finish; }
@@ -709,6 +715,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_connection_t *c = pc->connection;
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = d->save = cln->data;
+        (void)PQsetNoticeProcessor(s->conn, ngx_pq_notice_processor, pc->log);
         return ngx_pq_queries(s, d, ngx_pq_type_location);
     }
     ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
@@ -946,6 +953,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     c->pool->log = c->log;
     c->read->log = c->log;
     c->write->log = c->log;
+    (void)PQsetNoticeProcessor(s->conn, ngx_pq_notice_processor, c->log);
 }
 
 static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
