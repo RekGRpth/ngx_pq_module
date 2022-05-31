@@ -56,7 +56,7 @@ location =/postgres {
 # or
 location =/postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    pq_pass unix:/run/postgresql:5432; # unix socket connection
+    pq_pass unix:/run/postgresql:5432; # unix socket connection and port is 5432
 }
 ```
 In upstream also may use nginx keepalive module:
@@ -70,7 +70,7 @@ upstream postgres {
 upstream postgres {
     keepalive 8;
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
-    server unix:/run/postgresql:5432; # unix socket connection
+    server unix:/run/postgresql:5432; # unix socket connection and port is 5432
 }
 ```
 pq_prepare
