@@ -1133,22 +1133,12 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     ngx_str_t connect_timeout = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
     u_char *p;
-    connect->show_context = PQSHOW_CONTEXT_ERRORS;
     connect->errors = PQERRORS_DEFAULT;
+    connect->show_context = PQSHOW_CONTEXT_ERRORS;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
         if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
-        if (str[i].len > sizeof("show_context=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"show_context=", sizeof("show_context=") - 1)) {
-            str[i].data += sizeof("show_context=") - 1;
-            str[i].len -= sizeof("show_context=") - 1;
-            static const ngx_conf_enum_t e[] = { { ngx_string("always"), PQSHOW_CONTEXT_ALWAYS }, { ngx_string("errors"), PQSHOW_CONTEXT_ERRORS }, { ngx_string("never"), PQSHOW_CONTEXT_NEVER }, { ngx_null_string, 0 } };
-            ngx_uint_t j;
-            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
-            if (!e[j].name.len) return "\"show_context\" value must be \"always\", \"errors\", or \"never\"";
-            connect->show_context = e[j].value;
-            continue;
-        }
         if (str[i].len > sizeof("errors=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"errors=", sizeof("errors=") - 1)) {
             str[i].data += sizeof("errors=") - 1;
             str[i].len -= sizeof("errors=") - 1;
@@ -1157,6 +1147,16 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
             if (!e[j].name.len) return "\"errors\" value must be \"default\", \"sqlstate\", \"terse\" or \"verbose\"";
             connect->errors = e[j].value;
+            continue;
+        }
+        if (str[i].len > sizeof("show_context=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"show_context=", sizeof("show_context=") - 1)) {
+            str[i].data += sizeof("show_context=") - 1;
+            str[i].len -= sizeof("show_context=") - 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("always"), PQSHOW_CONTEXT_ALWAYS }, { ngx_string("errors"), PQSHOW_CONTEXT_ERRORS }, { ngx_string("never"), PQSHOW_CONTEXT_NEVER }, { ngx_null_string, 0 } };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
+            if (!e[j].name.len) return "\"show_context\" value must be \"always\", \"errors\", or \"never\"";
+            connect->show_context = e[j].value;
             continue;
         }
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
