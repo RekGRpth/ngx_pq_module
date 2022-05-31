@@ -353,7 +353,8 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res)
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s", PQresStatus(PQresultStatus(res))); }
-    return d && d->request == qq->request ? NGX_HTTP_BAD_GATEWAY : NGX_OK;
+    if (d && d->request != qq->request) return NGX_OK;
+    return NGX_HTTP_BAD_GATEWAY;
 }
 
 static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
@@ -368,7 +369,8 @@ static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s and %s not supported", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(res))); }
-    return d && d->request == qq->request ? NGX_HTTP_BAD_GATEWAY : NGX_OK;
+    if (d && d->request != qq->request) return NGX_OK;
+    return NGX_HTTP_BAD_GATEWAY;
 }
 
 static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
@@ -380,11 +382,11 @@ static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     ngx_connection_t *c = s->connection;
     ngx_pfree(c->pool, qq);
     s->query.type = query->type;
-    if (d && d->request != qq->request) return NGX_OK;
     const char *value;
     size_t len = 0;
     if ((value = PQcmdStatus(res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(res))); }
+    if (d && d->request != qq->request) return NGX_OK;
     if (ngx_http_push_stream_delete_channel_my && d && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp(value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
         ngx_pq_command_t *command = query->commands.elts;
         command = &command[1];
