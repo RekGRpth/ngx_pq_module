@@ -1,6 +1,5 @@
 #include <internal/c.h>
 #include <internal/pqexpbuffer.h>
-#include <libpq-events.h>
 #include <libpq-fe.h>
 #include <ngx_http.h>
 
@@ -589,19 +588,6 @@ static void ngx_pq_notice_processor(void *arg, const char *message) {
     ngx_pq_log_error(NGX_LOG_NOTICE, s->connection->log, 0, message, "PGRES_NONFATAL_ERROR");
 }
 
-static int ngx_pq_event_proc(PGEventId evtId, void *evtInfo, void *passThrough) {
-    ngx_pq_save_t *s = passThrough;
-    switch (evtId) {
-        case PGEVT_CONNDESTROY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_CONNDESTROY"); break;
-        case PGEVT_CONNRESET: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_CONNRESET"); break;
-        case PGEVT_REGISTER: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_REGISTER"); break;
-        case PGEVT_RESULTCOPY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_RESULTCOPY"); break;
-        case PGEVT_RESULTCREATE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_RESULTCREATE"); break;
-        case PGEVT_RESULTDESTROY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGEVT_RESULTDESTROY"); break;
-    }
-    return 1;
-}
-
 static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     const char **keywords;
@@ -676,7 +662,6 @@ found:
     cln->handler = ngx_pq_save_cln_handler;
     s->conn = conn;
     s->connection = c;
-    if (!PQregisterEventProc(conn, ngx_pq_event_proc, "ngx_pq_module", s)) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "!PQregisterEventProc"); goto destroy; }
     if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
         if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
     } else {
