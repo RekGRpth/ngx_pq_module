@@ -148,6 +148,7 @@ typedef struct {
 } ngx_pq_save_t;
 
 typedef struct {
+    ngx_array_t variables;
     ngx_http_request_t *request;
     ngx_peer_connection_t peer;
     ngx_pq_save_t *save;
@@ -229,14 +230,24 @@ static char *PQresultErrorMessageMy(const PGresult *res) {
 static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_t *query, const u_char *data, size_t len) {
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%*s", (int)len, data);
     if (!len) return NGX_OK;
-    if (query->type & ngx_pq_type_upstream && query->output.index) {
-        ngx_pq_variable_t *variable = s->variables.elts;
+    if (!d) return NGX_OK;
+    ngx_http_request_t *r = d->request;
+    if (query->output.index) {
+        ngx_array_t *variables;
+        ngx_connection_t *c;
+        if (query->type & ngx_pq_type_upstream) {
+            c = s->connection;
+            variables = &s->variables;
+        } else if (query->type & ngx_pq_type_location) {
+            c = r->connection;
+            variables = &d->variables;
+        } else return NGX_OK;
+        ngx_pq_variable_t *variable = variables->elts;
         ngx_uint_t i;
-        for (i = 0; i < s->variables.nelts; i++) if (variable[i].index == query->output.index) break;
+        for (i = 0; i < variables->nelts; i++) if (variable[i].index == query->output.index) break;
         ngx_chain_t *cl;
-        ngx_connection_t *c = s->connection;
-        if (i == s->variables.nelts) {
-            if (!s->variables.elts && ngx_array_init(&s->variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
+        if (i == variables->nelts) {
+            if (!variables->elts && ngx_array_init(&s->variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
             if (!(variable = ngx_array_push(&s->variables))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_array_push"); return NGX_ERROR; }
             ngx_memzero(variable, sizeof(*variable));
             variable->index = query->output.index;
@@ -249,8 +260,7 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
         cl->next = NULL;
         if (!(cl->buf = ngx_create_temp_buf(c->pool, len))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
         cl->buf->last = ngx_copy(cl->buf->last, data, len);
-    } else if (query->output.type && d) {
-        ngx_http_request_t *r = d->request;
+    } else if (query->output.type) {
         ngx_http_upstream_t *u = r->upstream;
         ngx_chain_t *cl, **ll;
         for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
@@ -719,8 +729,23 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     ngx_int_t index = data;
-    ngx_pq_variable_t *variable = s->variables.elts;
-    for (ngx_uint_t i = 0; i < s->variables.nelts; i++) if (variable[i].index == index) {
+    ngx_array_t *variables;
+    ngx_pq_variable_t *variable;
+    variables = &d->variables;
+    variable = variables->elts;
+    for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == index) {
+        for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) v->len += cl->buf->last - cl->buf->pos;
+        u_char *p;
+        if (!(p = v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
+        for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) p = ngx_copy(p, cl->buf->pos, cl->buf->last - cl->buf->pos);
+        v->no_cacheable = 0;
+        v->not_found = 0;
+        v->valid = 1;
+        return NGX_OK;
+    }
+    variables = &s->variables;
+    variable = variables->elts;
+    for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == index) {
         for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) v->len += cl->buf->last - cl->buf->pos;
         u_char *p;
         if (!(p = v->data = ngx_pnalloc(r->pool, v->len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
@@ -760,7 +785,6 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             continue;
         }
         if (str[i].len > sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
-            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (str[i].data[sizeof("output=") - 1] == '$' && query->type & ngx_pq_type_upstream) {
                 ngx_str_t name = str[i];
                 name.data += sizeof("output=") - 1 + 1;
@@ -772,6 +796,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
                 variable->data = query->output.index;
                 continue;
             }
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_csv }, { ngx_string("plain"), ngx_pq_output_plain }, { ngx_string("value"), ngx_pq_output_value }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
