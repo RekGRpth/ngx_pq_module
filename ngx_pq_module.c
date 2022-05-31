@@ -79,6 +79,7 @@ typedef struct {
 typedef struct {
     ngx_array_t options;
     ngx_msec_t timeout;
+    PGVerbosity verbosity;
 } ngx_pq_connect_t;
 
 typedef struct {
@@ -651,6 +652,7 @@ found:
     for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
     PGconn *conn = PQconnectStartParams(keywords, values, 0);
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "CONNECTION_BAD"); goto finish; }
+    (void)PQsetErrorVerbosity(conn, connect->verbosity);
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessageMy(conn), "PQsetnonblocking == -1"); goto finish; }
     int fd;
     if ((fd = PQsocket(conn)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket < 0"); goto finish; }
@@ -1030,7 +1032,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
 }
 
-static void ngx_pg_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
+static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "finalize http upstream request: %i", rc);
     if (!u->cleanup) return ngx_http_finalize_request(r, NGX_DONE);
     *u->cleanup = NULL;
@@ -1086,7 +1088,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     rc = ngx_pq_connect(s, d);
 ret:
     if (rc == NGX_AGAIN) return;
-    ngx_pg_upstream_finalize_request(r, u, rc);
+    ngx_pq_upstream_finalize_request(r, u, rc);
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
@@ -1129,10 +1131,21 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     ngx_str_t connect_timeout = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
     u_char *p;
+    connect->verbosity = PQERRORS_DEFAULT;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
         if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
+        if (str[i].len > sizeof("error_verbosity=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"error_verbosity=", sizeof("error_verbosity=") - 1)) {
+            str[i].data += sizeof("error_verbosity=") - 1;
+            str[i].len -= sizeof("error_verbosity=") - 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("default"), PQERRORS_DEFAULT }, { ngx_string("sqlstate"), PQERRORS_SQLSTATE }, { ngx_string("terse"), PQERRORS_TERSE }, { ngx_string("verbose"), PQERRORS_VERBOSE }, { ngx_null_string, 0 } };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
+            if (!e[j].name.len) return "\"error_verbosity\" value must be \"default\", \"sqlstate\", \"terse\" or \"verbose\"";
+            connect->verbosity = e[j].value;
+            continue;
+        }
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
