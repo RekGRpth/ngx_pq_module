@@ -332,8 +332,8 @@ static ngx_int_t ngx_pq_copy(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     int len;
     ngx_int_t rc = NGX_OK;
     switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
-        case 0: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQgetCopyData == 0"); break;
-        case -1: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQgetCopyData == -1"); break;
+        case 0: break;
+        case -1: break;
         case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
         default: s->query.row++; if (ngx_pq_output(s, d, query, (const u_char *)buffer, len) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR; break;
     }
@@ -351,8 +351,8 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res)
     ngx_pfree(c->pool, qq);
     s->query.type = query->type;
     const char *value;
-    if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(res)), value); }
-    else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s", PQresStatus(PQresultStatus(res))); }
+    if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "%s and %s", PQresStatus(PQresultStatus(res)), value); }
+    else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "%s", PQresStatus(PQresultStatus(res))); }
     if (!d || d->request != qq->request) return NGX_OK;
     return NGX_HTTP_BAD_GATEWAY;
 }
