@@ -888,9 +888,12 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         ngx_add_timer(c->read, s->timeout);
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
-    c->close = 1;
     c->data = s->keep.data;
-    s->keep.read_handler(ev);
+    c->read->handler = s->keep.read_handler;
+    c->read->handler(ev);
+    if (c->fd == -1) return;
+    c->data = s;
+    c->read->handler = ngx_pq_read_handler;
 }
 
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
