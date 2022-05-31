@@ -888,6 +888,7 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         ngx_add_timer(c->read, s->timeout);
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
+    c->close = 1;
     c->data = s->keep.data;
     s->keep.read_handler(ev);
 }
