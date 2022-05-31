@@ -11,7 +11,7 @@ __DATA__
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         server unix:/run/postgresql:5432;
     }
 --- config
@@ -34,7 +34,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         server unix:/run/postgresql:5432;
     }
 --- config
@@ -54,7 +54,7 @@ Content-Type: text/html
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde" 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -78,7 +78,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab union select $2 order by 1" 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -102,7 +102,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, $4 order by 1" 23 23 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -126,7 +126,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select null::text as ab, $1 as cde union select $2, $3 order by 2" 23 "" 23;
         server unix:/run/postgresql:5432;
     }
@@ -150,7 +150,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, null::text as cde union select $2, $3 order by 1" 23 23 "";
         server unix:/run/postgresql:5432;
     }
@@ -174,7 +174,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, null::text order by 1" 23 "" 23;
         server unix:/run/postgresql:5432;
     }
@@ -198,7 +198,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde" 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -223,7 +223,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab union select $2 order by 1" 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -248,7 +248,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, $4 order by 1" 23 23 23 23;
         server unix:/run/postgresql:5432;
     }
@@ -273,7 +273,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select null::text as ab, $1 as cde union select $2, $3 order by 2" 23 "" 23;
         server unix:/run/postgresql:5432;
     }
@@ -298,7 +298,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, null::text as cde union select $2, $3 order by 1" 23 23 "";
         server unix:/run/postgresql:5432;
     }
@@ -323,7 +323,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, null::text order by 1" 23 "" 23;
         server unix:/run/postgresql:5432;
     }
@@ -348,7 +348,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         server unix:/run/postgresql:5432;
     }
 --- config
@@ -368,7 +368,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
     upstream pg {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         server unix:/run/postgresql:5432;
     }
 --- config

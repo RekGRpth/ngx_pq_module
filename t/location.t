@@ -11,7 +11,7 @@ __DATA__
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select 1" output=value;
     }
@@ -30,7 +30,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select 1/0";
     }
@@ -46,7 +46,7 @@ Content-Type: text/html
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde" $arg_a::23 $arg_b::23 output=plain;
     }
@@ -65,7 +65,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab union select $2 order by 1" $arg_a::23 $arg_b::23 output=plain;
     }
@@ -84,7 +84,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde union select $3, $4 order by 1" $arg_a::23 $arg_b::23 $arg_c::23 $arg_d::23 output=plain;
     }
@@ -103,7 +103,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select null::text as ab, $1 as cde union select $2, $3 order by 2" $arg_a::23 $arg_b $arg_c::23 output=plain;
     }
@@ -122,7 +122,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, null::text as cde union select $2, $3 order by 1" $arg_a::23 $arg_b::23 $arg_c output=plain;
     }
@@ -141,7 +141,7 @@ Content-Type: text/plain
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde union select $3, null::text order by 1" $arg_a::23 $arg_b $arg_c::23 output=plain;
     }
@@ -161,7 +161,7 @@ Content-Type: text/plain
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde" $arg_a::23 $arg_b::23 output=csv;
     }
@@ -181,7 +181,7 @@ Content-Type: text/csv
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab union select $2 order by 1" $arg_a::23 $arg_b::23 output=csv;
     }
@@ -201,7 +201,7 @@ Content-Type: text/csv
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde union select $3, $4 order by 1" $arg_a::23 $arg_b::23 $arg_c::23 $arg_d::23 output=csv;
     }
@@ -221,7 +221,7 @@ Content-Type: text/csv
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select null::text as ab, $1 as cde union select $2, $3 order by 2" $arg_a::23 $arg_b $arg_c::23 output=csv;
     }
@@ -241,7 +241,7 @@ Content-Type: text/csv
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, null::text as cde union select $2, $3 order by 1" $arg_a::23 $arg_b::23 $arg_c output=csv;
     }
@@ -261,7 +261,7 @@ Content-Type: text/csv
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select $1 as ab, $2 as cde union select $3, null::text order by 1" $arg_a::23 $arg_b $arg_c::23 output=csv;
     }
@@ -280,7 +280,7 @@ Content-Type: text/csv
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "do $$ begin raise info '%', 1;end;$$";
     }
@@ -297,7 +297,7 @@ Content-Type: text/plain
 --- config
     location =/ {
         default_type text/csv;
-        pq_option user=postgres dbname=postgres;
+        pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "copy (select 34 as ab, 'qwe' as cde union select 89, null order by 1) to stdout with (format csv, header true)" output=value;
     }
