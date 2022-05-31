@@ -346,11 +346,10 @@ static ngx_int_t ngx_pq_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res)
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     s->query.type = query->type;
-    if (d && d->request != qq->request) return NGX_OK;
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s and %s", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessageMy(res), "PQresultStatus == %s", PQresStatus(PQresultStatus(res))); }
-    return NGX_HTTP_BAD_GATEWAY;
+    return d && d->request == qq->request ? NGX_HTTP_BAD_GATEWAY : NGX_OK;
 }
 
 static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
@@ -360,11 +359,10 @@ static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     s->query.type = query->type;
-    if (d && d->request != qq->request) return NGX_OK;
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s and %s not supported", PQresStatus(PQresultStatus(res)), value); }
     else { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "%s not supported", PQresStatus(PQresultStatus(res))); }
-    return NGX_HTTP_BAD_GATEWAY;
+    return d && d->request == qq->request ? NGX_HTTP_BAD_GATEWAY : NGX_OK;
 }
 
 static ngx_int_t ngx_pq_command(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
