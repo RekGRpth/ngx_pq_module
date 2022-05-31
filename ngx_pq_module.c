@@ -1,7 +1,10 @@
+#include <ngx_http.h>
+
+#undef OPENSSL_API_COMPAT
+
 #include <internal/c.h>
 #include <internal/pqexpbuffer.h>
 #include <libpq-fe.h>
-#include <ngx_http.h>
 
 extern ngx_int_t ngx_http_push_stream_add_msg_to_channel_my(ngx_log_t *log, ngx_str_t *id, ngx_str_t *text, ngx_str_t *event_id, ngx_str_t *event_type, ngx_flag_t store_messages, ngx_pool_t *temp_pool) __attribute__((weak));
 extern ngx_int_t ngx_http_push_stream_delete_channel_my(ngx_log_t *log, ngx_str_t *id, u_char *text, size_t len, ngx_pool_t *temp_pool) __attribute__((weak));
