@@ -124,15 +124,15 @@ location =/postgres {
 ```
 pq_query
 -------------
-* Syntax: **pq_query** *sql* [ *$arg* | *$arg*::*$oid* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
+* Syntax: **pq_query** *sql* [ *$argument_value* | *$argument_value*::*$argument_oid* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
 * Default: --
 * Context: location, if in location, upstream
 
-Sets query(queries) sql(s) (named only nginx variables allowed as identifier only), optional argument(s) (nginx variables allowed) and it(s) oid(s) (nginx variables allowed) and output type (no nginx variables allowed):
+Sets sql (named only nginx variables allowed as identifier only), optional (several) $argument_value (nginx variables allowed), $argument_oid (nginx variables allowed) and output csv/plain/value (location only, no nginx variables allowed) or $variable (create nginx variable) for prepare and execute:
 ```nginx
 location =/postgres {
     pq_pass postgres; # upstream is postgres
-    pq_query "SELECT now()" output=csv; # simple query and csv output type
+    pq_query "SELECT now()" output=csv; # prepare and execute simple query and csv output type
 }
 # or
 location =/postgres {
@@ -147,6 +147,6 @@ location =/postgres {
 # or
 location =/postgres {
     pq_pass postgres; # upstream is postgres
-    pq_query "SELECT $1, $2::text" str::25 $arg output=plain; # extended query with two arguments: first query argument is str and its oid is 25 (TEXTOID) and second query argument is taken from $arg variable and auto oid and plain output type
+    pq_query "SELECT $1, $2::text" string::25 $arg output=plain; # prepare and execute extended query with two arguments (first argument is string and its oid is 25 (TEXTOID) and second argument is taken from $arg variable and auto oid) and plain output type
 }
 ```
