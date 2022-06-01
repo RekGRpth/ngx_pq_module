@@ -433,6 +433,7 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
                 if (PQExpBufferDataBroken(sql)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "PQExpBufferDataBroken"); rc = NGX_ERROR; goto term; }
                 if (!PQsendQueryParams(s->conn, sql.data, 0, NULL, NULL, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQsendQueryParams"); rc = NGX_ERROR; goto term; }
                 ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryParams('%s')", sql.data);
+                s->query.count++;
                 rc = NGX_OK;
 term:
                 termPQExpBuffer(&sql);
