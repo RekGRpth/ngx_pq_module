@@ -272,7 +272,9 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
 }
 
 static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK");
+    const char *value;
+    if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK and %s", value); }
+    else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); }
     if (ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&s->query.queue);
     ngx_queue_remove(q);
