@@ -3,6 +3,7 @@
 #undef OPENSSL_API_COMPAT
 
 #include <internal/c.h>
+#include <internal/libpq-int.h>
 #include <internal/pqexpbuffer.h>
 #include <libpq-fe.h>
 
@@ -119,6 +120,7 @@ typedef struct {
 } ngx_pq_channel_queue_t;
 
 typedef struct {
+    int inBufSize;
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_msec_t timeout;
@@ -558,9 +560,17 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     }
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessageMy(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
-//    if (!ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
+    if (s->query.count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->query.count = %i", s->query.count); return NGX_HTTP_BAD_GATEWAY; }
+    if (!ngx_queue_empty(&s->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
     if (!d) return rc;
     if (rc == NGX_OK && s->query.type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
+    if (s->conn->inBufSize > s->inBufSize) {
+        ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
+        char *newbuf;
+        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
+        s->conn->inBuffer = newbuf;
+        s->conn->inBufSize = s->inBufSize;
+    }
     return rc;
 }
 
@@ -665,6 +675,7 @@ found:
     c->write->log = pc->log;
     if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+    s->inBufSize = conn->inBufSize;
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
     ngx_queue_init(&s->channel.queue);
     ngx_queue_init(&s->query.queue);
