@@ -1370,6 +1370,23 @@ static ngx_command_t ngx_pq_commands[] = {
     ngx_null_command
 };
 
+static ngx_int_t ngx_pq_db_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return NGX_OK;
+    if (!(v->data = (u_char *)PQdb(s->conn))) return NGX_OK;
+    v->len = ngx_strlen(v->data);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1421,7 +1438,25 @@ static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable
     return NGX_OK;
 }
 
+static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return NGX_OK;
+    if (!(v->data = PQsslAttribute(s->conn, (const char *)data))) return NGX_OK;
+    v->len = ngx_strlen(v->data);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    return NGX_OK;
+}
+
 static const ngx_http_variable_t ngx_pq_variables[] = {
+  { ngx_string("pq_db"), NULL, ngx_pq_db_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_error_column_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, column_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_error_constraint_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, constraint_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_error_context"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, context), NGX_HTTP_VAR_CHANGEABLE, 0 },
@@ -1454,6 +1489,11 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_option_standard_conforming_strings"), NULL, ngx_pq_option_get_handler, (uintptr_t)"standard_conforming_strings", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_timezone"), NULL, ngx_pq_option_get_handler, (uintptr_t)"TimeZone", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_pid"), NULL, ngx_pq_pid_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_ssl_attribute_cipher"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_cipher", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_ssl_attribute_compression"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_compression", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_ssl_attribute_key_bits"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_bits", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_ssl_attribute_library"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"library", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_ssl_attribute_protocol"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"protocol", NGX_HTTP_VAR_CHANGEABLE, 0 },
     ngx_http_null_variable
 };
 
