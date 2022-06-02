@@ -1478,6 +1478,7 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_error_sqlstate"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, sqlstate), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_error_statement_position"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, statement_position), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_error_table_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, table_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_hostaddr"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQhostaddr, NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_host"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQhost, NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_application_name"), NULL, ngx_pq_option_get_handler, (uintptr_t)"application_name", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_client_encoding"), NULL, ngx_pq_option_get_handler, (uintptr_t)"client_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
