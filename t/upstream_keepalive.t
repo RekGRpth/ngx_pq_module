@@ -21,6 +21,7 @@ __DATA__
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -37,6 +38,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -82,6 +84,7 @@ Content-Type: text/html
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -98,6 +101,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -121,6 +125,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -137,6 +142,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -160,6 +166,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -176,6 +183,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -199,6 +207,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -215,6 +224,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -238,6 +248,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -254,6 +265,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -277,6 +289,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -293,6 +306,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -316,6 +330,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -333,6 +348,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -356,6 +372,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -373,6 +390,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -396,6 +414,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -413,6 +432,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -436,6 +456,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -453,6 +474,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -476,6 +498,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -493,6 +516,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -516,6 +540,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -533,6 +558,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -555,6 +581,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -571,6 +598,7 @@ Content-Type: text/plain
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
@@ -591,6 +619,7 @@ option-standard-conforming-strings: on
         add_header option-application-name $pq_option_application_name always;
         add_header option-client-encoding $pq_option_client_encoding always;
         add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-intervalstyle $pq_option_intervalstyle always;
         add_header option-is-superuser $pq_option_is_superuser always;
         add_header option-server-encoding $pq_option_server_encoding always;
         add_header option-session-authorization $pq_option_session_authorization always;
@@ -608,6 +637,7 @@ Content-Type: text/csv
 option-application-name: nginx
 option-client-encoding: UTF8
 option-integer-datetimes: on
+option-intervalstyle: postgres
 option-is-superuser: on
 option-server-encoding: UTF8
 option-session-authorization: postgres
