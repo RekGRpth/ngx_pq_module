@@ -11,6 +11,13 @@ __DATA__
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- config
     location =/ {
+        add_header option-application-name $pq_option_application_name always;
+        add_header option-client-encoding $pq_option_client_encoding always;
+        add_header option-integer-datetimes $pq_option_integer_datetimes always;
+        add_header option-is-superuser $pq_option_is_superuser always;
+        add_header option-server-encoding $pq_option_server_encoding always;
+        add_header option-session-authorization $pq_option_session_authorization always;
+        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
         pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select 1" output=value;
@@ -21,6 +28,13 @@ GET /
 --- response_headers
 Content-Length: 1
 Content-Type: text/plain
+option-application-name: nginx
+option-client-encoding: UTF8
+option-integer-datetimes: on
+option-is-superuser: on
+option-server-encoding: UTF8
+option-session-authorization: postgres
+option-standard-conforming-strings: on
 --- response_body chomp
 1
 --- timeout: 60
