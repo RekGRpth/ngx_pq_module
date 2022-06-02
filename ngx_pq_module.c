@@ -182,17 +182,6 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     return NGX_CONF_OK;
 }
 
-static ngx_http_module_t ngx_pq_ctx = {
-    .preconfiguration = NULL,
-    .postconfiguration = NULL,
-    .create_main_conf = NULL,
-    .init_main_conf = NULL,
-    .create_srv_conf = ngx_pq_create_srv_conf,
-    .merge_srv_conf = NULL,
-    .create_loc_conf = ngx_pq_create_loc_conf,
-    .merge_loc_conf = ngx_pq_merge_loc_conf
-};
-
 static u_char *ngx_pq_log_error_handler(ngx_log_t *log, u_char *buf, size_t len) {
     u_char *p = buf;
     ngx_pq_log_t *original = log->data;
@@ -1328,6 +1317,55 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_pass_request_body"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.pass_request_body), NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
     ngx_null_command
+};
+
+static ngx_int_t ngx_pq_option_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return NGX_OK;
+    ngx_str_t *name = (ngx_str_t *)data;
+    PQExpBufferData paramName;
+    initPQExpBuffer(&paramName);
+    appendBinaryPQExpBuffer(&paramName, (const char *)name->data + sizeof("pq_option_") - 1, name->len - sizeof("pq_option_") + 1);
+    if (PQExpBufferDataBroken(paramName)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQExpBufferDataBroken"); goto term; }
+    if (!(v->data = PQparameterStatus(s->conn, paramName.data))) goto term;
+    v->len = ngx_strlen(v->data);
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+term:
+    termPQExpBuffer(&paramName);
+    return NGX_OK;
+}
+
+static const ngx_http_variable_t ngx_pq_variables[] = {
+  { ngx_string("pq_option_"), NULL, ngx_pq_option_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE|NGX_HTTP_VAR_PREFIX, 0 },
+    ngx_http_null_variable
+};
+
+static ngx_int_t ngx_pq_preconfiguration(ngx_conf_t *cf) {
+    ngx_http_variable_t *var;
+    for (ngx_http_variable_t *v = ngx_pq_variables; v->name.len; v++) {
+        if (!(var = ngx_http_add_variable(cf, &v->name, v->flags))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_http_add_variable"); return NGX_ERROR; }
+        *var = *v;
+    }
+    return NGX_OK;
+}
+
+static ngx_http_module_t ngx_pq_ctx = {
+    .preconfiguration = ngx_pq_preconfiguration,
+    .postconfiguration = NULL,
+    .create_main_conf = NULL,
+    .init_main_conf = NULL,
+    .create_srv_conf = ngx_pq_create_srv_conf,
+    .merge_srv_conf = NULL,
+    .create_loc_conf = ngx_pq_create_loc_conf,
+    .merge_loc_conf = ngx_pq_merge_loc_conf
 };
 
 ngx_module_t ngx_pq_module = {
