@@ -1034,6 +1034,8 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
     if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
+    r->headers_out.content_length_n = 0;
+    for (ngx_chain_t *cl = u->out_bufs; cl; cl = cl->next) r->headers_out.content_length_n += cl->buf->last - cl->buf->pos;
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
     u->header_sent = 1;
