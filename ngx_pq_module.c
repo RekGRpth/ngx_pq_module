@@ -1328,8 +1328,7 @@ static ngx_int_t ngx_pq_option_get_handler(ngx_http_request_t *r, ngx_http_varia
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
-    const char *paramName = (const char *)data;
-    if (!(v->data = PQparameterStatus(s->conn, paramName))) return NGX_OK;
+    if (!(v->data = PQparameterStatus(s->conn, (const char *)data))) return NGX_OK;
     v->len = ngx_strlen(v->data);
     v->valid = 1;
     v->no_cacheable = 0;
