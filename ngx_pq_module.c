@@ -105,6 +105,7 @@ typedef struct {
     ngx_http_upstream_peer_t peer;
     ngx_log_t *log;
     ngx_pq_connect_t connect;
+    size_t buffer_size;
 } ngx_pq_srv_conf_t;
 
 typedef struct {
@@ -155,12 +156,14 @@ typedef struct {
 static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
     ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
+    conf->buffer_size = NGX_CONF_UNSET_SIZE;
     return conf;
 }
 
 static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
+    conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
     conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
     conf->upstream.pass_request_body = NGX_CONF_UNSET;
     conf->upstream.request_buffering = NGX_CONF_UNSET;
@@ -172,6 +175,7 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_pq_loc_conf_t *prev = parent;
     ngx_pq_loc_conf_t *conf = child;
     if (!conf->upstream.upstream) conf->upstream = prev->upstream;
+    ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
     ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
     ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
     ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
@@ -618,11 +622,13 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_pq_save_t *s;
     ngx_http_request_t *r = d->request;
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    size_t buffer_size = plcf->upstream.buffer_size;
     ngx_http_upstream_t *u = r->upstream;
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
     ngx_pq_connect_t *connect = &plcf->connect;
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        buffer_size = pscf->buffer_size;
         connect = &pscf->connect;
     }
     plcf->upstream.connect_timeout = connect->timeout;
@@ -675,7 +681,7 @@ found:
     c->write->log = pc->log;
     if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
-    s->inBufSize = conn->inBufSize;
+    s->inBufSize = ngx_max(conn->inBufSize, (int)buffer_size);
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
     ngx_queue_init(&s->channel.queue);
     ngx_queue_init(&s->query.queue);
@@ -993,6 +999,7 @@ static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
         if (pscf->peer.init_upstream(cf, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "peer.init_upstream != NGX_OK"); return NGX_ERROR; }
         pscf->peer.init = uscf->peer.init ? uscf->peer.init : ngx_http_upstream_init_round_robin_peer;
+        ngx_conf_init_size_value(pscf->buffer_size, (size_t)ngx_pagesize);
     } else {
         if (ngx_http_upstream_init_round_robin(cf, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "ngx_http_upstream_init_round_robin != NGX_OK"); return NGX_ERROR; }
     }
@@ -1325,6 +1332,8 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_prepare"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_prepare_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_prepare, NULL },
   { ngx_string("pq_query"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_query_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_query|ngx_pq_type_output, NULL },
   { ngx_string("pq_query"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_query_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_query, NULL },
+  { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
+  { ngx_string("pq_buffer_size"), NGX_HTTP_UPS_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_SRV_CONF_OFFSET, offsetof(ngx_pq_srv_conf_t, buffer_size), NULL },
   { ngx_string("pq_ignore_client_abort"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.ignore_client_abort), NULL },
   { ngx_string("pq_pass_request_body"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.pass_request_body), NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
