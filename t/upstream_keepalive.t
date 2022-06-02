@@ -25,7 +25,7 @@ __DATA__
 GET /
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 1
 Content-Type: text/plain
 --- response_body chomp
 1
@@ -49,6 +49,7 @@ Content-Type: text/plain
 GET /
 --- error_code: 502
 --- response_headers
+Content-Length: 157
 Content-Type: text/html
 --- timeout: 60
 
@@ -71,7 +72,7 @@ Content-Type: text/html
 GET /?a=12&b=345
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 13
 Content-Type: text/plain
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345"
@@ -96,7 +97,7 @@ Content-Type: text/plain
 GET /?a=12&b=345
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 9
 Content-Type: text/plain
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
@@ -121,7 +122,7 @@ Content-Type: text/plain
 GET /?a=12&b=345&c=67&d=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 19
 Content-Type: text/plain
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345\x{0a}67\x{09}89"
@@ -146,7 +147,7 @@ Content-Type: text/plain
 GET /?a=34&b=qwe&c=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 19
 Content-Type: text/plain
 --- response_body eval
 "ab\x{09}cde\x{0a}\\N\x{09}34\x{0a}qwe\x{09}89"
@@ -171,7 +172,7 @@ Content-Type: text/plain
 GET /?a=34&b=89&c=qwe
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 19
 Content-Type: text/plain
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}\\N\x{0a}89\x{09}qwe"
@@ -196,7 +197,7 @@ Content-Type: text/plain
 GET /?a=34&b=qwe&c=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 19
 Content-Type: text/plain
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}qwe\x{0a}89\x{09}\\N"
@@ -222,7 +223,7 @@ Content-Type: text/plain
 GET /?a=12&b=345
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 13
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a}12,345"
@@ -248,7 +249,7 @@ Content-Type: text/csv
 GET /?a=12&b=345
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 9
 Content-Type: text/csv
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
@@ -274,7 +275,7 @@ Content-Type: text/csv
 GET /?a=12&b=345&c=67&d=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 19
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a}12,345\x{0a}67,89"
@@ -300,7 +301,7 @@ Content-Type: text/csv
 GET /?a=34&b=qwe&c=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 17
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a},34\x{0a}qwe,89"
@@ -326,7 +327,7 @@ Content-Type: text/csv
 GET /?a=34&b=89&c=qwe
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 17
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a}34,\x{0a}89,qwe"
@@ -352,7 +353,7 @@ Content-Type: text/csv
 GET /?a=34&b=qwe&c=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 17
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,"
@@ -376,6 +377,7 @@ Content-Type: text/csv
 GET /
 --- error_code: 200
 --- response_headers
+Content-Length: 0
 Content-Type: text/plain
 --- timeout: 60
 
@@ -398,7 +400,7 @@ Content-Type: text/plain
 GET /?a=34&b=qwe&c=89
 --- error_code: 200
 --- response_headers
-Transfer-Encoding: chunked
+Content-Length: 18
 Content-Type: text/csv
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
