@@ -1491,6 +1491,7 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_option_server_encoding"), NULL, ngx_pq_option_get_handler, (uintptr_t)"server_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_server_version"), NULL, ngx_pq_option_get_handler, (uintptr_t)"server_version", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_session_authorization"), NULL, ngx_pq_option_get_handler, (uintptr_t)"session_authorization", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_options"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQoptions, NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_standard_conforming_strings"), NULL, ngx_pq_option_get_handler, (uintptr_t)"standard_conforming_strings", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_timezone"), NULL, ngx_pq_option_get_handler, (uintptr_t)"TimeZone", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_pid"), NULL, ngx_pq_pid_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
