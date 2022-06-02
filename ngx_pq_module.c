@@ -1497,6 +1497,7 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_ssl_attribute_key_bits"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_bits", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_ssl_attribute_library"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"library", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_ssl_attribute_protocol"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"protocol", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_user"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQuser, NGX_HTTP_VAR_CHANGEABLE, 0 },
     ngx_http_null_variable
 };
 
