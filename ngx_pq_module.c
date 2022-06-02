@@ -1328,23 +1328,29 @@ static ngx_int_t ngx_pq_option_get_handler(ngx_http_request_t *r, ngx_http_varia
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
-    ngx_str_t *name = (ngx_str_t *)data;
-    PQExpBufferData paramName;
-    initPQExpBuffer(&paramName);
-    appendBinaryPQExpBuffer(&paramName, (const char *)name->data + sizeof("pq_option_") - 1, name->len - sizeof("pq_option_") + 1);
-    if (PQExpBufferDataBroken(paramName)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "PQExpBufferDataBroken"); goto term; }
-    if (!(v->data = PQparameterStatus(s->conn, paramName.data))) goto term;
+    const char *paramName = (const char *)data;
+    if (!(v->data = PQparameterStatus(s->conn, paramName))) return NGX_OK;
     v->len = ngx_strlen(v->data);
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
-term:
-    termPQExpBuffer(&paramName);
     return NGX_OK;
 }
 
 static const ngx_http_variable_t ngx_pq_variables[] = {
-  { ngx_string("pq_option_"), NULL, ngx_pq_option_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE|NGX_HTTP_VAR_PREFIX, 0 },
+  { ngx_string("pq_option_application_name"), NULL, ngx_pq_option_get_handler, (uintptr_t)"application_name", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_client_encoding"), NULL, ngx_pq_option_get_handler, (uintptr_t)"client_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_datestyle"), NULL, ngx_pq_option_get_handler, (uintptr_t)"DateStyle", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_default_transaction_read_only"), NULL, ngx_pq_option_get_handler, (uintptr_t)"default_transaction_read_only", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_in_hot_standby"), NULL, ngx_pq_option_get_handler, (uintptr_t)"in_hot_standby", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_integer_datetimes"), NULL, ngx_pq_option_get_handler, (uintptr_t)"integer_datetimes", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_intervalstyle"), NULL, ngx_pq_option_get_handler, (uintptr_t)"IntervalStyle", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_is_superuser"), NULL, ngx_pq_option_get_handler, (uintptr_t)"is_superuser", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_server_encoding"), NULL, ngx_pq_option_get_handler, (uintptr_t)"server_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_server_version"), NULL, ngx_pq_option_get_handler, (uintptr_t)"server_version", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_session_authorization"), NULL, ngx_pq_option_get_handler, (uintptr_t)"session_authorization", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_standard_conforming_strings"), NULL, ngx_pq_option_get_handler, (uintptr_t)"standard_conforming_strings", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_option_timezone"), NULL, ngx_pq_option_get_handler, (uintptr_t)"TimeZone", NGX_HTTP_VAR_CHANGEABLE, 0 },
     ngx_http_null_variable
 };
 
