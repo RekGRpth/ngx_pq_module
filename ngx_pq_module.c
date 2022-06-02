@@ -121,6 +121,27 @@ typedef struct {
 } ngx_pq_channel_queue_t;
 
 typedef struct {
+    ngx_str_t column_name;
+    ngx_str_t constraint_name;
+    ngx_str_t context;
+    ngx_str_t datatype_name;
+    ngx_str_t internal_position;
+    ngx_str_t internal_query;
+    ngx_str_t message_detail;
+    ngx_str_t message_hint;
+    ngx_str_t message_primary;
+    ngx_str_t schema_name;
+    ngx_str_t severity;
+    ngx_str_t severity_nonlocalized;
+    ngx_str_t source_file;
+    ngx_str_t source_function;
+    ngx_str_t source_line;
+    ngx_str_t sqlstate;
+    ngx_str_t statement_position;
+    ngx_str_t table_name;
+} ngx_pq_error_t;
+
+typedef struct {
     int inBufSize;
     ngx_array_t variables;
     ngx_connection_t *connection;
@@ -145,6 +166,7 @@ typedef struct {
     ngx_array_t variables;
     ngx_http_request_t *request;
     ngx_peer_connection_t peer;
+    ngx_pq_error_t error;
     ngx_pq_save_t *save;
 } ngx_pq_data_t;
 
@@ -329,6 +351,17 @@ static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return rc;
 }
 
+static ngx_int_t ngx_pq_copy_error(ngx_pq_data_t *d, PGresult *res, int fieldcode, ngx_uint_t offset) {
+    ngx_http_request_t *r = d->request;
+    const char *err;
+    if (!(err = PQresultErrorField(res, fieldcode))) return NGX_OK;
+    ngx_str_t str = {ngx_strlen(err), err};
+    ngx_str_t *error = (ngx_str_t *)((u_char *)&d->error + offset);
+    if (!(error->data = ngx_pstrdup(r->pool, &str))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+    error->len = str.len;
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     const char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQresultErrorMessage(res), "%s and %s", PQresStatus(PQresultStatus(res)), value); }
@@ -341,6 +374,24 @@ static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGre
     ngx_pq_query_t *query = qq->query;
     s->query.type = query->type;
     if (!d) return NGX_OK;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SEVERITY, offsetof(ngx_pq_error_t, severity)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SEVERITY_NONLOCALIZED, offsetof(ngx_pq_error_t, severity_nonlocalized)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SQLSTATE, offsetof(ngx_pq_error_t, sqlstate)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_MESSAGE_PRIMARY, offsetof(ngx_pq_error_t, message_primary)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_MESSAGE_DETAIL, offsetof(ngx_pq_error_t, message_detail)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_MESSAGE_HINT, offsetof(ngx_pq_error_t, message_hint)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_STATEMENT_POSITION, offsetof(ngx_pq_error_t, statement_position)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_INTERNAL_POSITION, offsetof(ngx_pq_error_t, internal_position)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_INTERNAL_QUERY, offsetof(ngx_pq_error_t, internal_query)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_CONTEXT, offsetof(ngx_pq_error_t, context)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SCHEMA_NAME, offsetof(ngx_pq_error_t, schema_name)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_TABLE_NAME, offsetof(ngx_pq_error_t, table_name)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_COLUMN_NAME, offsetof(ngx_pq_error_t, column_name)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_DATATYPE_NAME, offsetof(ngx_pq_error_t, datatype_name)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_CONSTRAINT_NAME, offsetof(ngx_pq_error_t, constraint_name)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FILE, offsetof(ngx_pq_error_t, source_file)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_LINE, offsetof(ngx_pq_error_t, source_line)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FUNCTION, offsetof(ngx_pq_error_t, source_function)) != NGX_OK) return NGX_HTTP_INTERNAL_SERVER_ERROR;
     return NGX_HTTP_BAD_GATEWAY;
 }
 
@@ -1319,6 +1370,23 @@ static ngx_command_t ngx_pq_commands[] = {
     ngx_null_command
 };
 
+static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_str_t *error = (ngx_str_t *)((u_char *)&d->error + data);
+    if (!error->len) return NGX_OK;
+    v->data = error->data;
+    v->len = error->len;
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    return NGX_OK;
+}
+
 static ngx_int_t ngx_pq_option_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1337,6 +1405,24 @@ static ngx_int_t ngx_pq_option_get_handler(ngx_http_request_t *r, ngx_http_varia
 }
 
 static const ngx_http_variable_t ngx_pq_variables[] = {
+  { ngx_string("pq_error_column_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, column_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_constraint_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, constraint_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_context"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, context), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_datatype_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, datatype_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_internal_position"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, internal_position), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_internal_query"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, internal_query), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_message_detail"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, message_detail), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_message_hint"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, message_hint), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_message_primary"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, message_primary), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_schema_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, schema_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_severity_nonlocalized"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, severity_nonlocalized), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_severity"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, severity), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_source_file"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, source_file), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_source_function"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, source_function), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_source_line"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, source_line), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_sqlstate"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, sqlstate), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_statement_position"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, statement_position), NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_error_table_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, table_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_application_name"), NULL, ngx_pq_option_get_handler, (uintptr_t)"application_name", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_client_encoding"), NULL, ngx_pq_option_get_handler, (uintptr_t)"client_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_option_datestyle"), NULL, ngx_pq_option_get_handler, (uintptr_t)"DateStyle", NGX_HTTP_VAR_CHANGEABLE, 0 },
