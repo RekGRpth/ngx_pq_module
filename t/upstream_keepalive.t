@@ -11,6 +11,7 @@ __DATA__
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -18,14 +19,14 @@ __DATA__
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_pass pg;
         pq_query "select 1" output=value;
     }
@@ -51,6 +52,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -85,6 +87,7 @@ error-sqlstate: 22012
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -93,14 +96,14 @@ error-sqlstate: 22012
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -126,6 +129,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -134,14 +138,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -167,6 +171,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -175,14 +180,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=plain;
         pq_pass pg;
     }
@@ -208,6 +213,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -216,14 +222,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -249,6 +255,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -257,14 +264,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -290,6 +297,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -298,14 +306,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -331,6 +339,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -339,14 +348,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -373,6 +382,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -381,14 +391,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -415,6 +425,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -423,14 +434,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=csv;
         pq_pass pg;
@@ -457,6 +468,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -465,14 +477,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -499,6 +511,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -507,14 +520,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -541,6 +554,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -549,14 +563,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -583,6 +597,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -590,14 +605,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         pq_pass pg;
         pq_query "do $$ begin raise info '%', 1;end;$$";
     }
@@ -621,6 +636,7 @@ option-standard-conforming-strings: on
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
+    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -628,14 +644,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_option_application_name always;
-        add_header option-client-encoding $pq_option_client_encoding always;
-        add_header option-integer-datetimes $pq_option_integer_datetimes always;
-        add_header option-intervalstyle $pq_option_intervalstyle always;
-        add_header option-is-superuser $pq_option_is_superuser always;
-        add_header option-server-encoding $pq_option_server_encoding always;
-        add_header option-session-authorization $pq_option_session_authorization always;
-        add_header option-standard-conforming-strings $pq_option_standard_conforming_strings always;
+        add_header option-application-name $pq_parameter_status_application_name always;
+        add_header option-client-encoding $pq_parameter_status_client_encoding always;
+        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
+        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
+        add_header option-is-superuser $pq_parameter_status_is_superuser always;
+        add_header option-server-encoding $pq_parameter_status_server_encoding always;
+        add_header option-session-authorization $pq_parameter_status_session_authorization always;
+        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
         default_type text/csv;
         pq_pass pg;
         pq_query "copy (select 34 as ab, 'qwe' as cde union select 89, null order by 1) to stdout with (format csv, header true)" output=value;
