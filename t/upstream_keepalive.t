@@ -58,6 +58,12 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
+        add_header error-message-primary $pq_error_message_primary always;
+        add_header error-severity $pq_error_severity always;
+        add_header error-severity-nonlocalized $pq_error_severity_nonlocalized always;
+        add_header error-source-file $pq_error_source_file always;
+        add_header error-source-function $pq_error_source_function always;
+        add_header error-sqlstate $pq_error_sqlstate always;
         pq_pass pg;
         pq_query "select 1/0";
     }
@@ -67,6 +73,12 @@ GET /
 --- response_headers
 Content-Length: 157
 Content-Type: text/html
+error-message-primary: division by zero
+error-severity: ERROR
+error-severity-nonlocalized: ERROR
+error-source-file: int.c
+error-source-function: int4div
+error-sqlstate: 22012
 --- timeout: 60
 
 === TEST 3:
