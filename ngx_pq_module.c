@@ -969,7 +969,6 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_pq_data_t *d = data;
     d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
-    d->save = NULL;
     if (!s) return;
     if (!ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
