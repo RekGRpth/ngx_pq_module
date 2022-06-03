@@ -72,12 +72,27 @@ user: postgres
     }
 --- config
     location =/ {
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
         add_header message-primary $pq_message_primary always;
+        add_header port $pq_port always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
         add_header severity $pq_severity always;
         add_header severity-nonlocalized $pq_severity_nonlocalized always;
         add_header source-file $pq_source_file always;
         add_header source-function $pq_source_function always;
         add_header sqlstate $pq_sqlstate always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_pass pg;
         pq_query "select 1/0";
     }
@@ -87,12 +102,27 @@ GET /
 --- response_headers
 Content-Length: 157
 Content-Type: text/html
+application-name: nginx
+client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
 message-primary: division by zero
+port: 5432
+server-encoding: UTF8
+session-authorization: postgres
 severity: ERROR
 severity-nonlocalized: ERROR
 source-file: int.c
 source-function: int4div
 sqlstate: 22012
+standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- timeout: 60
 
 === TEST 3:
