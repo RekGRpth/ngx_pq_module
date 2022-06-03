@@ -150,3 +150,55 @@ location =/postgres {
     pq_query "SELECT $1, $2::text" string::25 $arg output=plain; # prepare and execute extended query with two arguments (first argument is string and its oid is 25 (TEXTOID) and second argument is taken from $arg variable and auto oid) and plain output type
 }
 ```
+# Embedded Variables
+-------------
+* Syntax: $pq_*name*
+
+```nginx
+location =/postgres {
+    add_header application_name $pq_application_name always; # application_name parameter status
+    add_header cipher $pq_cipher always; # cipher ssl attribute
+    add_header client_encoding $pq_client_encoding always; # client_encoding parameter status
+    add_header column_name $pq_column_name always; # column_name result error field
+    add_header compression $pq_compression always; # compression ssl attribute
+    add_header constraint_name $pq_constraint_name always; # constraint_name result error field
+    add_header context $pq_context always; # context result error field
+    add_header datatype_name $pq_datatype_name always; # datatype_name result error field
+    add_header datestyle $pq_datestyle always; # datestyle parameter status
+    add_header db $pq_db always; # database name
+    add_header default_transaction_read_only $pq_default_transaction_read_only always; # default_transaction_read_only parameter status
+    add_header host $pq_host always; # database host name
+    add_header hostaddr $pq_hostaddr always; # database host address
+    add_header in_hot_standby $pq_in_hot_standby always; # in_hot_standby parameter status
+    add_header integer_datetimes $pq_integer_datetimes always; # integer_datetimes parameter status
+    add_header internal_position $pq_internal_position always; # internal_position result error field
+    add_header internal_query $pq_internal_query always; # internal_query result error field
+    add_header intervalstyle $pq_intervalstyle always; # intervalstyle parameter status
+    add_header is_superuser $pq_is_superuser always; # is_superuser parameter status
+    add_header key_bits $pq_key_bits always; # key_bits ssl attribute
+    add_header library $pq_library always; # library ssl attribute
+    add_header message_detail $pq_message_detail always; # message_detail result error field
+    add_header message_hint $pq_message_hint always; # message_hint result error field
+    add_header message_primary $pq_message_primary always; # message_primary result error field
+    add_header options $pq_options always; # options parameter status
+    add_header pid $pq_pid always; # backend pid
+    add_header port $pq_port always; # database port
+    add_header protocol $pq_protocol always; # protocol parameter status
+    add_header schema_name $pq_schema_name always; # schema_name result error field
+    add_header server_encoding $pq_server_encoding always; # server_encoding parameter status
+    add_header server_version $pq_server_version always; # server_version parameter status
+    add_header session_authorization $pq_session_authorization always; # session_authorization parameter status
+    add_header severity $pq_severity always; # severity eesult error field
+    add_header severity_nonlocalized $pq_severity_nonlocalized always; # severity_nonlocalized result error field
+    add_header source_file $pq_source_file always;# source_file result error field
+    add_header source_function $pq_source_function always; # source_function result error field
+    add_header source_line $pq_source_line always; # source_line result error field
+    add_header sqlstate $pq_sqlstate always; # sqlstate result error field
+    add_header standard_conforming_strings $pq_standard_conforming_strings always; # standard_conforming_strings parameter status
+    add_header statement_position $pq_statement_position always; # statement_position result error field
+    add_header table_name $pq_table_name always; # table_name result error field
+    add_header timezone $pq_timezone always; # timezone parameter status
+    add_header transaction_status $pq_transaction_status always; # transaction status
+    add_header user $pq_user always; # database user
+}
+```
