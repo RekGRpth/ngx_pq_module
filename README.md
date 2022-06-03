@@ -188,7 +188,7 @@ location =/postgres {
     add_header server_encoding $pq_server_encoding always; # server_encoding parameter status
     add_header server_version $pq_server_version always; # server_version parameter status
     add_header session_authorization $pq_session_authorization always; # session_authorization parameter status
-    add_header severity $pq_severity always; # severity eesult error field
+    add_header severity $pq_severity always; # severity result error field
     add_header severity_nonlocalized $pq_severity_nonlocalized always; # severity_nonlocalized result error field
     add_header source_file $pq_source_file always;# source_file result error field
     add_header source_function $pq_source_function always; # source_function result error field
