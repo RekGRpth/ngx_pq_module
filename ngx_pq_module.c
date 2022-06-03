@@ -1458,6 +1458,28 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
     return NGX_OK;
 }
 
+static ngx_int_t ngx_pq_transaction_status_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    v->not_found = 1;
+    ngx_http_upstream_t *u = r->upstream;
+    if (!u) return NGX_OK;
+    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return NGX_OK;
+    switch (PQtransactionStatus(s->conn)) {
+        case PQTRANS_ACTIVE: ngx_str_set(v, "ACTIVE"); break;
+        case PQTRANS_IDLE: ngx_str_set(v, "IDLE"); break;
+        case PQTRANS_INERROR: ngx_str_set(v, "INERROR"); break;
+        case PQTRANS_INTRANS: ngx_str_set(v, "INTRANS"); break;
+        case PQTRANS_UNKNOWN: ngx_str_set(v, "UNKNOWN"); break;
+    }
+    v->valid = 1;
+    v->no_cacheable = 0;
+    v->not_found = 0;
+    return NGX_OK;
+}
+
 static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_application_name"), NULL, ngx_pq_parameter_status_get_handler, (uintptr_t)"application_name", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_cipher"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_cipher", NGX_HTTP_VAR_CHANGEABLE, 0 },
@@ -1501,6 +1523,7 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_statement_position"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, statement_position), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_table_name"), NULL, ngx_pq_error_get_handler, offsetof(ngx_pq_error_t, table_name), NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_timezone"), NULL, ngx_pq_parameter_status_get_handler, (uintptr_t)"TimeZone", NGX_HTTP_VAR_CHANGEABLE, 0 },
+  { ngx_string("pq_transaction_status"), NULL, ngx_pq_transaction_status_get_handler, 0, NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_user"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQuser, NGX_HTTP_VAR_CHANGEABLE, 0 },
     ngx_http_null_variable
 };
