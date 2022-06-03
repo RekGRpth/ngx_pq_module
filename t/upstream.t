@@ -849,7 +849,6 @@ GET /?a=34&b=qwe&c=89
 Content-Length: 18
 Content-Type: text/csv
 application-name: nginx
-application-name: nginx
 client-encoding: UTF8
 db: postgres
 default-transaction-read-only: off

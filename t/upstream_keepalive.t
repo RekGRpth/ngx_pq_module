@@ -21,12 +21,19 @@ __DATA__
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_pass pg;
         pq_query "select 1" output=value;
     }
@@ -38,12 +45,19 @@ Content-Length: 1
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body chomp
 1
 --- timeout: 60
@@ -98,12 +112,19 @@ sqlstate: 22012
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -115,12 +136,19 @@ Content-Length: 13
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345"
 --- timeout: 60
@@ -140,12 +168,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -157,12 +192,19 @@ Content-Length: 9
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
 --- timeout: 60
@@ -182,12 +224,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=plain;
         pq_pass pg;
     }
@@ -199,12 +248,19 @@ Content-Length: 19
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345\x{0a}67\x{09}89"
 --- timeout: 60
@@ -224,12 +280,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -241,12 +304,19 @@ Content-Length: 19
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{09}cde\x{0a}\\N\x{09}34\x{0a}qwe\x{09}89"
 --- timeout: 60
@@ -266,12 +336,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -283,12 +360,19 @@ Content-Length: 19
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}\\N\x{0a}89\x{09}qwe"
 --- timeout: 60
@@ -308,12 +392,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -325,12 +416,19 @@ Content-Length: 19
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}qwe\x{0a}89\x{09}\\N"
 --- timeout: 60
@@ -350,12 +448,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -368,12 +473,19 @@ Content-Length: 13
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a}12,345"
 --- timeout: 60
@@ -393,12 +505,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -411,12 +530,19 @@ Content-Length: 9
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
 --- timeout: 60
@@ -436,12 +562,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=csv;
         pq_pass pg;
@@ -454,12 +587,19 @@ Content-Length: 19
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a}12,345\x{0a}67,89"
 --- timeout: 60
@@ -479,12 +619,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -497,12 +644,19 @@ Content-Length: 17
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a},34\x{0a}qwe,89"
 --- timeout: 60
@@ -522,12 +676,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -540,12 +701,19 @@ Content-Length: 17
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,\x{0a}89,qwe"
 --- timeout: 60
@@ -565,12 +733,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -583,12 +758,19 @@ Content-Length: 17
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,"
 --- timeout: 60
@@ -607,12 +789,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_pass pg;
         pq_query "do $$ begin raise info '%', 1;end;$$";
     }
@@ -624,12 +813,19 @@ Content-Length: 0
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- timeout: 60
 
 === TEST 16:
@@ -646,12 +842,19 @@ standard-conforming-strings: on
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         default_type text/csv;
         pq_pass pg;
         pq_query "copy (select 34 as ab, 'qwe' as cde union select 89, null order by 1) to stdout with (format csv, header true)" output=value;
@@ -664,12 +867,19 @@ Content-Length: 18
 Content-Type: text/csv
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
 --- timeout: 60
