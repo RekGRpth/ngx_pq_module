@@ -17,6 +17,8 @@ __DATA__
         add_header client-encoding $pq_client_encoding always;
         add_header db $pq_db always;
         add_header default-transaction-read-only $pq_default_transaction_read_only always;
+        add_header host $pq_host always;
+        add_header in-hot-standby $pq_in_hot_standby always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
@@ -40,6 +42,8 @@ application-name: nginx
 client-encoding: UTF8
 db: postgres
 default-transaction-read-only: off
+host: /run/postgresql
+in-hot-standby: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
