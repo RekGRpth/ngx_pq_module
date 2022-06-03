@@ -17,14 +17,14 @@ __DATA__
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_pass pg;
         pq_query "select 1" output=value;
     }
@@ -34,14 +34,14 @@ GET /
 --- response_headers
 Content-Length: 1
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body chomp
 1
 --- timeout: 60
@@ -57,12 +57,12 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header error-message-primary $pq_error_message_primary always;
-        add_header error-severity $pq_error_severity always;
-        add_header error-severity-nonlocalized $pq_error_severity_nonlocalized always;
-        add_header error-source-file $pq_error_source_file always;
-        add_header error-source-function $pq_error_source_function always;
-        add_header error-sqlstate $pq_error_sqlstate always;
+        add_header message-primary $pq_message_primary always;
+        add_header severity $pq_severity always;
+        add_header severity-nonlocalized $pq_severity_nonlocalized always;
+        add_header source-file $pq_source_file always;
+        add_header source-function $pq_source_function always;
+        add_header sqlstate $pq_sqlstate always;
         pq_pass pg;
         pq_query "select 1/0";
     }
@@ -72,12 +72,12 @@ GET /
 --- response_headers
 Content-Length: 157
 Content-Type: text/html
-error-message-primary: division by zero
-error-severity: ERROR
-error-severity-nonlocalized: ERROR
-error-source-file: int.c
-error-source-function: int4div
-error-sqlstate: 22012
+message-primary: division by zero
+severity: ERROR
+severity-nonlocalized: ERROR
+source-file: int.c
+source-function: int4div
+sqlstate: 22012
 --- timeout: 60
 
 === TEST 3:
@@ -92,14 +92,14 @@ error-sqlstate: 22012
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -109,14 +109,14 @@ GET /?a=12&b=345
 --- response_headers
 Content-Length: 13
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345"
 --- timeout: 60
@@ -133,14 +133,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b output=plain;
         pq_pass pg;
     }
@@ -150,14 +150,14 @@ GET /?a=12&b=345
 --- response_headers
 Content-Length: 9
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
 --- timeout: 60
@@ -174,14 +174,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=plain;
         pq_pass pg;
     }
@@ -191,14 +191,14 @@ GET /?a=12&b=345&c=67&d=89
 --- response_headers
 Content-Length: 19
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{09}cde\x{0a}12\x{09}345\x{0a}67\x{09}89"
 --- timeout: 60
@@ -215,14 +215,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -232,14 +232,14 @@ GET /?a=34&b=qwe&c=89
 --- response_headers
 Content-Length: 19
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{09}cde\x{0a}\\N\x{09}34\x{0a}qwe\x{09}89"
 --- timeout: 60
@@ -256,14 +256,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -273,14 +273,14 @@ GET /?a=34&b=89&c=qwe
 --- response_headers
 Content-Length: 19
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}\\N\x{0a}89\x{09}qwe"
 --- timeout: 60
@@ -297,14 +297,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
         pq_pass pg;
     }
@@ -314,14 +314,14 @@ GET /?a=34&b=qwe&c=89
 --- response_headers
 Content-Length: 19
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{09}cde\x{0a}34\x{09}qwe\x{0a}89\x{09}\\N"
 --- timeout: 60
@@ -338,14 +338,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -356,14 +356,14 @@ GET /?a=12&b=345
 --- response_headers
 Content-Length: 13
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a}12,345"
 --- timeout: 60
@@ -380,14 +380,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
         pq_pass pg;
@@ -398,14 +398,14 @@ GET /?a=12&b=345
 --- response_headers
 Content-Length: 9
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab\x{0a}12\x{0a}345"
 --- timeout: 60
@@ -422,14 +422,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=csv;
         pq_pass pg;
@@ -440,14 +440,14 @@ GET /?a=12&b=345&c=67&d=89
 --- response_headers
 Content-Length: 19
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a}12,345\x{0a}67,89"
 --- timeout: 60
@@ -464,14 +464,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -482,14 +482,14 @@ GET /?a=34&b=qwe&c=89
 --- response_headers
 Content-Length: 17
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a},34\x{0a}qwe,89"
 --- timeout: 60
@@ -506,14 +506,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -524,14 +524,14 @@ GET /?a=34&b=89&c=qwe
 --- response_headers
 Content-Length: 17
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a}34,\x{0a}89,qwe"
 --- timeout: 60
@@ -548,14 +548,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
         pq_pass pg;
@@ -566,14 +566,14 @@ GET /?a=34&b=qwe&c=89
 --- response_headers
 Content-Length: 17
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,"
 --- timeout: 60
@@ -589,14 +589,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         pq_pass pg;
         pq_query "do $$ begin raise info '%', 1;end;$$";
     }
@@ -606,14 +606,14 @@ GET /
 --- response_headers
 Content-Length: 0
 Content-Type: text/plain
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- timeout: 60
 
 === TEST 16:
@@ -627,14 +627,14 @@ option-standard-conforming-strings: on
     }
 --- config
     location =/ {
-        add_header option-application-name $pq_parameter_status_application_name always;
-        add_header option-client-encoding $pq_parameter_status_client_encoding always;
-        add_header option-integer-datetimes $pq_parameter_status_integer_datetimes always;
-        add_header option-intervalstyle $pq_parameter_status_intervalstyle always;
-        add_header option-is-superuser $pq_parameter_status_is_superuser always;
-        add_header option-server-encoding $pq_parameter_status_server_encoding always;
-        add_header option-session-authorization $pq_parameter_status_session_authorization always;
-        add_header option-standard-conforming-strings $pq_parameter_status_standard_conforming_strings always;
+        add_header application-name $pq_application_name always;
+        add_header client-encoding $pq_client_encoding always;
+        add_header integer-datetimes $pq_integer_datetimes always;
+        add_header intervalstyle $pq_intervalstyle always;
+        add_header is-superuser $pq_is_superuser always;
+        add_header server-encoding $pq_server_encoding always;
+        add_header session-authorization $pq_session_authorization always;
+        add_header standard-conforming-strings $pq_standard_conforming_strings always;
         default_type text/csv;
         pq_pass pg;
         pq_query "copy (select 34 as ab, 'qwe' as cde union select 89, null order by 1) to stdout with (format csv, header true)" output=value;
@@ -645,14 +645,14 @@ GET /?a=34&b=qwe&c=89
 --- response_headers
 Content-Length: 18
 Content-Type: text/csv
-option-application-name: nginx
-option-client-encoding: UTF8
-option-integer-datetimes: on
-option-intervalstyle: postgres
-option-is-superuser: on
-option-server-encoding: UTF8
-option-session-authorization: postgres
-option-standard-conforming-strings: on
+application-name: nginx
+client-encoding: UTF8
+integer-datetimes: on
+intervalstyle: postgres
+is-superuser: on
+server-encoding: UTF8
+session-authorization: postgres
+standard-conforming-strings: on
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
 --- timeout: 60
