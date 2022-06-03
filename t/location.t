@@ -15,12 +15,17 @@ __DATA__
     location =/ {
         add_header application-name $pq_application_name always;
         add_header client-encoding $pq_client_encoding always;
+        add_header db $pq_db always;
+        add_header default-transaction-read-only $pq_default_transaction_read_only always;
         add_header integer-datetimes $pq_integer_datetimes always;
         add_header intervalstyle $pq_intervalstyle always;
         add_header is-superuser $pq_is_superuser always;
+        add_header port $pq_port always;
         add_header server-encoding $pq_server_encoding always;
         add_header session-authorization $pq_session_authorization always;
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
+        add_header transaction-status $pq_transaction_status always;
+        add_header user $pq_user always;
         pq_option user=postgres;
         pq_pass unix:/run/postgresql:5432;
         pq_query "select 1" output=value;
@@ -33,12 +38,17 @@ Content-Length: 1
 Content-Type: text/plain
 application-name: nginx
 client-encoding: UTF8
+db: postgres
+default-transaction-read-only: off
 integer-datetimes: on
 intervalstyle: postgres
 is-superuser: on
+port: 5432
 server-encoding: UTF8
 session-authorization: postgres
 standard-conforming-strings: on
+transaction-status: IDLE
+user: postgres
 --- response_body chomp
 1
 --- timeout: 60
