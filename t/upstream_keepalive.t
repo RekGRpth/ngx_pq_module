@@ -11,7 +11,6 @@ __DATA__
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -66,7 +65,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -101,7 +99,6 @@ sqlstate: 22012
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -157,7 +154,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -213,7 +209,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -269,7 +264,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -325,7 +319,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -381,7 +374,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -437,7 +429,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -494,7 +485,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -551,7 +541,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -608,7 +597,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -665,7 +653,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -722,7 +709,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -779,7 +765,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;
@@ -832,7 +817,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         keepalive 1;
         pq_option user=postgres;

@@ -10,7 +10,6 @@ __DATA__
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         server unix:/run/postgresql:5432;
@@ -64,7 +63,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         server unix:/run/postgresql:5432;
@@ -98,7 +96,6 @@ sqlstate: 22012
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde" 23 23;
@@ -153,7 +150,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab union select $2 order by 1" 23 23;
@@ -208,7 +204,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, $4 order by 1" 23 23 23 23;
@@ -263,7 +258,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select null::text as ab, $1 as cde union select $2, $3 order by 2" 23 "" 23;
@@ -318,7 +312,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, null::text as cde union select $2, $3 order by 1" 23 23 "";
@@ -373,7 +366,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, null::text order by 1" 23 "" 23;
@@ -428,7 +420,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde" 23 23;
@@ -484,7 +475,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab union select $2 order by 1" 23 23;
@@ -540,7 +530,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, $4 order by 1" 23 23 23 23;
@@ -596,7 +585,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select null::text as ab, $1 as cde union select $2, $3 order by 2" 23 "" 23;
@@ -652,7 +640,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, null::text as cde union select $2, $3 order by 1" 23 23 "";
@@ -708,7 +695,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         pq_prepare query "select $1 as ab, $2 as cde union select $3, null::text order by 1" 23 "" 23;
@@ -764,7 +750,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         server unix:/run/postgresql:5432;
@@ -816,7 +801,6 @@ user: postgres
 --- main_config
     load_module /etc/nginx/modules/ngx_pq_module.so;
 --- http_config
-    variables_hash_bucket_size 128;
     upstream pg {
         pq_option user=postgres;
         server unix:/run/postgresql:5432;
