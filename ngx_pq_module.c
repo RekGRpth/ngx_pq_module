@@ -1,4 +1,5 @@
 #include <ngx_http.h>
+#include "ngx_http_upstream.c"
 
 #undef OPENSSL_API_COMPAT
 
@@ -1083,43 +1084,14 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
 }
 
-static void ngx_pq_upstream_finalize_request(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_int_t rc) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "finalize http upstream request: %i", rc);
-    if (!u->cleanup) return ngx_http_finalize_request(r, NGX_DONE);
-    *u->cleanup = NULL;
-    u->cleanup = NULL;
-    if (u->resolved && u->resolved->ctx) {
-        ngx_resolve_name_done(u->resolved->ctx);
-        u->resolved->ctx = NULL;
-    }
-    if (u->state && u->state->response_time == (ngx_msec_t) -1) {
-        u->state->response_time = ngx_current_msec - u->start_time;
-        if (u->peer.connection) u->state->bytes_sent = u->peer.connection->sent;
-    }
-    u->finalize_request(r, rc);
-    if (u->peer.free && u->peer.sockaddr) {
-        u->peer.free(&u->peer, u->peer.data, 0);
-        u->peer.sockaddr = NULL;
-    }
-    if (u->peer.connection) {
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "close http upstream connection: %d", u->peer.connection->fd);
-        if (u->peer.connection->pool) ngx_destroy_pool(u->peer.connection->pool);
-        ngx_close_connection(u->peer.connection);
-    }
-    u->peer.connection = NULL;
-    r->read_event_handler = ngx_http_block_reading;
-    if (rc == NGX_DECLINED) return;
-    r->connection->log->action = "sending to client";
-    if (!u->header_sent || rc == NGX_HTTP_REQUEST_TIME_OUT || rc == NGX_HTTP_CLIENT_CLOSED_REQUEST) return ngx_http_finalize_request(r, rc);
-    if (r->header_only) return ngx_http_finalize_request(r, rc);
-    if (rc == NGX_OK) rc = ngx_http_send_special(r, NGX_HTTP_LAST);
-    ngx_http_finalize_request(r, rc);
-}
-
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
     ngx_int_t rc = NGX_AGAIN;
+    ngx_connection_t *c = s->connection;
+    if (c->read->timedout) { c->read->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
+    if (c->write->timedout) { c->write->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
+    if (ngx_http_upstream_test_connect(c) != NGX_OK) return ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_ERROR);
     switch (PQstatus(s->conn)) {
         case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
         case CONNECTION_AWAITING_RESPONSE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AWAITING_RESPONSE"); break;
@@ -1138,8 +1110,11 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     }
     rc = ngx_pq_connect(s, d);
 ret:
-    if (rc == NGX_AGAIN) return;
-    ngx_pq_upstream_finalize_request(r, u, rc);
+    switch (rc) {
+        case NGX_ERROR: ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
+        case NGX_AGAIN: break;
+        default: ngx_http_upstream_finalize_request(r, u, rc); break;
+    }
 }
 
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
