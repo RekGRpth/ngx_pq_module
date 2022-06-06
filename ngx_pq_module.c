@@ -188,6 +188,8 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     if (!conf) return NULL;
     conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
     conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
+    conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
+    conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
     conf->upstream.pass_request_body = NGX_CONF_UNSET;
     conf->upstream.request_buffering = NGX_CONF_UNSET;
     ngx_str_set(&conf->upstream.module, "pq");
@@ -198,10 +200,14 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_pq_loc_conf_t *prev = parent;
     ngx_pq_loc_conf_t *conf = child;
     if (!conf->upstream.upstream) conf->upstream = prev->upstream;
+    ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
+    ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
     ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
+    ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
     ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
     ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
     ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
+    if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
     return NGX_CONF_OK;
 }
 
@@ -1325,6 +1331,21 @@ static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *con
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
 }
 
+static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
+  { ngx_string("error"), NGX_HTTP_UPSTREAM_FT_ERROR },
+  { ngx_string("http_403"), NGX_HTTP_UPSTREAM_FT_HTTP_403 },
+  { ngx_string("http_404"), NGX_HTTP_UPSTREAM_FT_HTTP_404 },
+  { ngx_string("http_429"), NGX_HTTP_UPSTREAM_FT_HTTP_429 },
+  { ngx_string("http_500"), NGX_HTTP_UPSTREAM_FT_HTTP_500 },
+  { ngx_string("http_503"), NGX_HTTP_UPSTREAM_FT_HTTP_503 },
+  { ngx_string("invalid_header"), NGX_HTTP_UPSTREAM_FT_INVALID_HEADER },
+  { ngx_string("non_idempotent"), NGX_HTTP_UPSTREAM_FT_NON_IDEMPOTENT },
+  { ngx_string("off"), NGX_HTTP_UPSTREAM_FT_OFF },
+  { ngx_string("timeout"), NGX_HTTP_UPSTREAM_FT_TIMEOUT },
+  { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
+  { ngx_null_string, 0 }
+};
+
 static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_execute"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_execute_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_execute|ngx_pq_type_output, NULL },
   { ngx_string("pq_execute"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_execute_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_execute, NULL },
@@ -1339,6 +1360,9 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
   { ngx_string("pq_buffer_size"), NGX_HTTP_UPS_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_SRV_CONF_OFFSET, offsetof(ngx_pq_srv_conf_t, buffer_size), NULL },
   { ngx_string("pq_ignore_client_abort"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.ignore_client_abort), NULL },
+  { ngx_string("pq_next_upstream"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE, ngx_conf_set_bitmask_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.next_upstream), &ngx_pq_next_upstream_masks },
+  { ngx_string("pq_next_upstream_timeout"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_msec_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.next_upstream_timeout), NULL },
+  { ngx_string("pq_next_upstream_tries"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_num_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.next_upstream_tries), NULL },
   { ngx_string("pq_pass_request_body"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.pass_request_body), NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
     ngx_null_command
