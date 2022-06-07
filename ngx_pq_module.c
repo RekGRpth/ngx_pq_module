@@ -618,6 +618,7 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     PQfinish(s->conn);
+    s->conn = NULL;
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
         ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
         ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
@@ -972,7 +973,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
     if (!s) return;
-    if (PQstatus(s->conn) == CONNECTION_OK && !ngx_queue_empty(&s->query.queue)) {
+    if (s->conn && PQstatus(s->conn) == CONNECTION_OK && !ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
             ngx_queue_remove(q);
