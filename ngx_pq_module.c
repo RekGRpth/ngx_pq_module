@@ -959,7 +959,7 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_pq_save_t *s = ev->data;
     ngx_connection_t *c = s->connection;
     if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && PQstatus(s->conn) == CONNECTION_OK) {
-        ngx_add_timer(c->read, s->timeout);
+        if (s->timeout) ngx_add_timer(c->read, s->timeout);
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
     ev->data = s->read.data;
