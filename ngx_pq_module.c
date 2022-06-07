@@ -1161,11 +1161,11 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     ngx_pq_option_t *option;
     if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
     ngx_str_t application_name = ngx_null_string;
-    ngx_str_t connect_timeout = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
     u_char *p;
     connect->errors = PQERRORS_DEFAULT;
     connect->show_context = PQSHOW_CONTEXT_ERRORS;
+    connect->timeout = 60 * 1000;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
@@ -1190,6 +1190,14 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
             connect->show_context = e[j].value;
             continue;
         }
+        if (str[i].len > sizeof("connect_timeout=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"connect_timeout=", sizeof("connect_timeout=") - 1)) {
+            str[i].data += sizeof("connect_timeout=") - 1;
+            str[i].len -= sizeof("connect_timeout=") - 1;
+            ngx_int_t n = ngx_parse_time(&str[i], 0);
+            if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
+            connect->timeout = (ngx_msec_t)n;
+            continue;
+        }
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
@@ -1200,24 +1208,12 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         option->val.len = str[i].len - option->key.len - 1;
         if (option->key.len == sizeof("application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"application_name", sizeof("application_name") - 1)) application_name = option->val;
         else if (option->key.len == sizeof("fallback_application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"fallback_application_name", sizeof("fallback_application_name") - 1)) application_name = option->val;
-        else if (option->key.len == sizeof("connect_timeout") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"connect_timeout", sizeof("connect_timeout") - 1)) connect_timeout = option->val;
     }
     if (!application_name.data) {
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
         ngx_str_set(&option->key, "application_name");
         ngx_str_set(&option->val, "nginx");
-    }
-    if (connect_timeout.data) {
-        ngx_int_t n = ngx_parse_time(&connect_timeout, 0);
-        if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
-        connect->timeout = (ngx_msec_t)n;
-    } else {
-        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
-        ngx_memzero(option, sizeof(*option));
-        ngx_str_set(&option->key, "connect_timeout");
-        ngx_str_set(&option->val, "60");
-        connect->timeout = 60 * 1000;
     }
     return NGX_CONF_OK;
 }
