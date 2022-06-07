@@ -616,7 +616,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
     ngx_connection_t *c = s->connection;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     PQfinish(s->conn);
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
         ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
