@@ -764,7 +764,6 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         ngx_pq_save_t *s = d->save = cln->data;
         if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR; }
         c->read->data = s->read.data;
-        c->read->handler = s->read.handler;
         return ngx_pq_queries(s, d, ngx_pq_type_location);
     }
     ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
@@ -964,11 +963,8 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
     ev->data = s->read.data;
-    ev->handler = s->read.handler;
-    ev->handler(ev);
-    if (c->fd == -1) return;
+    s->read.handler(ev);
     ev->data = s;
-    ev->handler = ngx_pq_read_handler;
 }
 
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
