@@ -63,11 +63,6 @@ typedef struct {
 } ngx_pq_command_t;
 
 typedef struct {
-    ngx_str_t key;
-    ngx_str_t val;
-} ngx_pq_option_t;
-
-typedef struct {
     ngx_array_t options;
     ngx_msec_t timeout;
     PGContextVisibility show_context;
@@ -652,8 +647,6 @@ static void ngx_pq_notice_processor(void *arg, const char *message) {
 
 static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
-    const char **keywords;
-    const char **values;
     ngx_pq_data_t *d = data;
     ngx_pq_save_t *s;
     ngx_http_request_t *r = d->request;
@@ -668,38 +661,40 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         connect = &pscf->connect;
     }
     plcf->upstream.connect_timeout = connect->timeout;
-    ngx_int_t rc = NGX_ERROR;
-    if (!(keywords = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*keywords)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
-    if (!(values = ngx_pcalloc(r->pool, (connect->options.nelts + (pc->sockaddr->sa_family != AF_UNIX ? 1 : 0) + 2 + 1) * sizeof(*values)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto ret; }
-    ngx_pq_option_t *option = connect->options.elts;
-    ngx_uint_t i;
-    for (i = 0; i < connect->options.nelts; i++) {
-        keywords[i] = (char *)option[i].key.data;
-        values[i] = (char *)option[i].val.data;
+    PQExpBufferData conninfo;
+    initPQExpBuffer(&conninfo);
+    ngx_str_t *option = connect->options.elts;
+    for (ngx_uint_t i = 0; i < connect->options.nelts; i++) {
+        if (i) appendPQExpBufferChar(&conninfo, ' ');
+        appendBinaryPQExpBuffer(&conninfo, (char *)option[i].data, option[i].len);
     }
     if (pc->sockaddr->sa_family != AF_UNIX) {
-        keywords[i] = "host";
+        appendPQExpBufferStr(&conninfo, " host=");
         ngx_http_upstream_server_t *us = uscf->servers->elts;
         ngx_str_t host = uscf->host;
         for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
 found:
-        host.data[host.len] = '\0';
-        for (ngx_uint_t j = 0; j < host.len; j++) if (host.data[j] == ':') { host.data[j] = '\0'; break; }
-        values[i] = (char *)host.data;
-        i++;
+        while (host.len--) if (host.data[host.len] == ':') break;
+        appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     }
-    u_char *p;
-    if (!(p = ngx_pnalloc(r->pool, pc->name->len + 1))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pstrdup"); goto ret; }
-    (void)ngx_cpystrn(p, pc->name->data, pc->name->len + 1);
-    keywords[i] = pc->sockaddr->sa_family != AF_UNIX ? "hostaddr" : "host";
-    values[i] = (char *)p + (pc->sockaddr->sa_family != AF_UNIX ? 0 : 5);
-    i++;
-    keywords[i] = "port";
-    for (ngx_uint_t j = 5; j < pc->name->len; j++) if (p[j] == ':') { p[j] = '\0'; values[i] = (char *)&p[j + 1]; break; }
-    rc = NGX_DECLINED;
-    if (!values[i]) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "port is null"); goto ret; }
-    for (i = 0; keywords[i]; i++) ngx_log_debug3(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%i: %s = %s", i, keywords[i], values[i]);
-    PGconn *conn = PQconnectStartParams(keywords, values, 0);
+    ngx_str_t host = *pc->name;
+    ngx_str_t port = host;
+    while (host.len--) if (host.data[host.len] == ':') break;
+    port.data += host.len + 1;
+    port.len -= host.len + 1;
+    if (pc->sockaddr->sa_family != AF_UNIX) {
+        appendPQExpBufferStr(&conninfo, " hostaddr=");
+        appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
+    } else {
+        appendPQExpBufferStr(&conninfo, " host=");
+        appendBinaryPQExpBuffer(&conninfo, (char *)host.data + 5, host.len - 5);
+    }
+    appendPQExpBufferStr(&conninfo, " port=");
+    appendBinaryPQExpBuffer(&conninfo, (char *)port.data, port.len);
+    ngx_int_t rc = NGX_ERROR;
+    if (PQExpBufferDataBroken(conninfo)) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQExpBufferDataBroken"); goto term; }
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", conninfo.data);
+    PGconn *conn = PQconnectStart(conninfo.data);
     if (PQstatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(conn), "CONNECTION_BAD"); goto finish; }
     (void)PQsetErrorContextVisibility(conn, connect->show_context);
     (void)PQsetErrorVerbosity(conn, connect->errors);
@@ -735,7 +730,8 @@ found:
         if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
     }
     pc->connection = c;
-    return NGX_AGAIN;
+    rc = NGX_AGAIN;
+    goto term;
 destroy:
     s->conn = NULL;
     ngx_destroy_pool(c->pool);
@@ -744,7 +740,8 @@ close:
     ngx_close_connection(c);
 finish:
     PQfinish(conn);
-ret:
+term:
+    termPQExpBuffer(&conninfo);
     return rc;
 }
 
@@ -1152,11 +1149,10 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
 
 static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
     if (connect->options.elts) return "is duplicate";
-    ngx_pq_option_t *option;
+    ngx_str_t *option;
     if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
     ngx_str_t application_name = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
-    u_char *p;
     connect->errors = PQERRORS_DEFAULT;
     connect->show_context = PQSHOW_CONTEXT_ERRORS;
     connect->timeout = 60 * 1000;
@@ -1192,22 +1188,16 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
             connect->timeout = (ngx_msec_t)n;
             continue;
         }
+        if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = str[i];
+        else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = str[i];
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
-        if (!(p = ngx_strlchr(str[i].data, str[i].data + str[i].len, '='))) return "!ngx_strlchr";
-        option->key.data = str[i].data;
-        option->key.len = p - str[i].data;
-        option->key.data[option->key.len] = '\0';
-        option->val.data = str[i].data + option->key.len + 1;
-        option->val.len = str[i].len - option->key.len - 1;
-        if (option->key.len == sizeof("application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"application_name", sizeof("application_name") - 1)) application_name = option->val;
-        else if (option->key.len == sizeof("fallback_application_name") - 1 && !ngx_strncasecmp(option->key.data, (u_char *)"fallback_application_name", sizeof("fallback_application_name") - 1)) application_name = option->val;
+        *option = str[i];
     }
     if (!application_name.data) {
         if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
         ngx_memzero(option, sizeof(*option));
-        ngx_str_set(&option->key, "application_name");
-        ngx_str_set(&option->val, "nginx");
+        ngx_str_set(option, "application_name=nginx");
     }
     return NGX_CONF_OK;
 }
