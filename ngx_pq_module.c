@@ -618,6 +618,7 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     PQfinish(s->conn);
+    s->conn = NULL;
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
         ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
         ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
