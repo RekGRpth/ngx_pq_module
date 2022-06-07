@@ -990,6 +990,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
     if (!pscf) return;
     ngx_connection_t *c = s->connection;
+    if (!c) return;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
     s->read.handler = c->read->handler;
     c->read->data = s;
