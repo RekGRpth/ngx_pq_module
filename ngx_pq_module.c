@@ -142,13 +142,11 @@ typedef struct {
     ngx_str_t table_name;
 } ngx_pq_error_t;
 
-typedef struct ngx_pq_data_t ngx_pq_data_t;
 typedef struct {
     int inBufSize;
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_msec_t timeout;
-    ngx_pq_data_t *data;
     PGconn *conn;
     struct {
         ngx_queue_t queue;
@@ -165,7 +163,7 @@ typedef struct {
     } query;
 } ngx_pq_save_t;
 
-typedef struct ngx_pq_data_t {
+typedef struct {
     ngx_array_t variables;
     ngx_http_request_t *request;
     ngx_peer_connection_t peer;
@@ -620,12 +618,6 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     PQfinish(s->conn);
-    s->conn = NULL;
-    if (s->data) {
-        ngx_pq_data_t *d = s->data;
-        d->save = NULL;
-        s->data = NULL;
-    }
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
         ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
         ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
@@ -725,7 +717,6 @@ found:
     c->write->log = pc->log;
     if (!(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
-    s->data = d;
     s->inBufSize = ngx_max(conn->inBufSize, (int)buffer_size);
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
     ngx_queue_init(&s->channel.queue);
@@ -769,7 +760,6 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = d->save = cln->data;
         if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR; }
-        s->data = d;
         return ngx_pq_queries(s, d, ngx_pq_type_location);
     }
     ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
@@ -981,8 +971,6 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_pq_data_t *d = data;
     d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
-    if (!s) return;
-    s->data = NULL;
     if (!ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
