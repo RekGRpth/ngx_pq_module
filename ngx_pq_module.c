@@ -970,6 +970,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
     ngx_pq_data_t *d = data;
     ngx_pq_save_t *s = d->save;
+    d->peer.free(pc, d->peer.data, state);
     if (!ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
@@ -983,7 +984,6 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             PQfreeCancel(cancel);
         }
     }
-    d->peer.free(pc, d->peer.data, state);
     if (pc->connection) return;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
