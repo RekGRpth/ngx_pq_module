@@ -969,8 +969,9 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
     ngx_pq_data_t *d = data;
-    ngx_pq_save_t *s = d->save;
     d->peer.free(pc, d->peer.data, state);
+    ngx_pq_save_t *s = d->save;
+    if (!s) return;
     if (!ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
