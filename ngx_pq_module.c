@@ -979,7 +979,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             s->query.count++;
         }
         PGcancel *cancel;
-        if ((cancel = PQgetCancel(s->conn))) {
+        if (s->conn && (cancel = PQgetCancel(s->conn))) {
             char errbuf[256];
             if (!PQcancel(cancel, errbuf, sizeof(errbuf))) ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel");
             PQfreeCancel(cancel);
