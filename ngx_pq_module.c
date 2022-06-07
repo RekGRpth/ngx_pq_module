@@ -709,6 +709,7 @@ found:
     rc = NGX_ERROR;
     ngx_connection_t *c = ngx_get_connection(fd, pc->log);
     if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
+    c->addr_text = *pc->name;
     c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
     c->read->log = pc->log;
     c->shared = 1;
