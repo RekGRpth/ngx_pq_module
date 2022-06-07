@@ -618,7 +618,6 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     PQfinish(s->conn);
-    s->conn = NULL;
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
         ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
         ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
@@ -970,21 +969,21 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
     ngx_pq_data_t *d = data;
-    d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
-    if (!s) return;
-    if (s->conn && PQstatus(s->conn) == CONNECTION_OK && !ngx_queue_empty(&s->query.queue)) {
+    if (!ngx_queue_empty(&s->query.queue)) {
         while (!ngx_queue_empty(&s->query.queue)) {
             ngx_queue_t *q = ngx_queue_head(&s->query.queue);
             ngx_queue_remove(q);
             s->query.count++;
         }
-        PGcancel *cancel = PQgetCancel(s->conn);
-        if (!cancel) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "!PQgetCancel"); return; }
-        char errbuf[256];
-        if (!PQcancel(cancel, errbuf, sizeof(errbuf))) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel"); PQfreeCancel(cancel); return; }
-        PQfreeCancel(cancel);
+        PGcancel *cancel;
+        if ((cancel = PQgetCancel(s->conn))) {
+            char errbuf[256];
+            if (!PQcancel(cancel, errbuf, sizeof(errbuf))) ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel");
+            PQfreeCancel(cancel);
+        }
     }
+    d->peer.free(pc, d->peer.data, state);
     if (pc->connection) return;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
