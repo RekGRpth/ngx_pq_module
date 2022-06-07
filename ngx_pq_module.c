@@ -628,12 +628,12 @@ static void ngx_pq_save_cln_handler(void *data) {
 }
 
 static ngx_int_t ngx_pq_connect(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_connection_t *c = s->connection;
     switch (PQstatus(s->conn)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "CONNECTION_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
         default: break;
     }
+    ngx_connection_t *c = s->connection;
     switch (PQconnectPoll(s->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); break;
         case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
