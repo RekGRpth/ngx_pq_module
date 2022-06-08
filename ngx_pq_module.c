@@ -1288,17 +1288,6 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     return NGX_CONF_OK;
 }
 
-static ngx_http_module_t ngx_pq_ctx = {
-    .preconfiguration = ngx_pq_preconfiguration,
-    .postconfiguration = NULL,
-    .create_main_conf = NULL,
-    .init_main_conf = NULL,
-    .create_srv_conf = ngx_pq_create_srv_conf,
-    .merge_srv_conf = NULL,
-    .create_loc_conf = ngx_pq_create_loc_conf,
-    .merge_loc_conf = ngx_pq_merge_loc_conf
-};
-
 static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
@@ -1507,6 +1496,17 @@ static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *con
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
 }
+
+static ngx_http_module_t ngx_pq_ctx = {
+    .preconfiguration = ngx_pq_preconfiguration,
+    .postconfiguration = NULL,
+    .create_main_conf = NULL,
+    .init_main_conf = NULL,
+    .create_srv_conf = ngx_pq_create_srv_conf,
+    .merge_srv_conf = NULL,
+    .create_loc_conf = ngx_pq_create_loc_conf,
+    .merge_loc_conf = ngx_pq_merge_loc_conf
+};
 
 static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
