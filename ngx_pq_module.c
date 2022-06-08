@@ -172,21 +172,6 @@ typedef struct {
     ngx_int_t index;
 } ngx_pq_variable_t;
 
-static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
-    ngx_pq_loc_conf_t *prev = parent;
-    ngx_pq_loc_conf_t *conf = child;
-    if (!conf->upstream.upstream) conf->upstream = prev->upstream;
-    ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
-    ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
-    ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
-    ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
-    ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
-    ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
-    ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
-    if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
-    return NGX_CONF_OK;
-}
-
 static u_char *ngx_pq_log_error_handler(ngx_log_t *log, u_char *buf, size_t len) {
     u_char *p = buf;
     ngx_pq_log_t *original = log->data;
@@ -1517,6 +1502,21 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     conf->upstream.request_buffering = NGX_CONF_UNSET;
     ngx_str_set(&conf->upstream.module, "pq");
     return conf;
+}
+
+static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
+    ngx_pq_loc_conf_t *prev = parent;
+    ngx_pq_loc_conf_t *conf = child;
+    if (!conf->upstream.upstream) conf->upstream = prev->upstream;
+    ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
+    ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
+    ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
+    ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
+    ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
+    ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
+    ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
+    if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
+    return NGX_CONF_OK;
 }
 
 static ngx_http_module_t ngx_pq_ctx = {
