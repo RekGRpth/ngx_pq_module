@@ -1115,76 +1115,6 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     return NGX_DONE;
 }
 
-static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
-    if (connect->options.elts) return "is duplicate";
-    ngx_str_t *option;
-    if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
-    ngx_str_t application_name = ngx_null_string;
-    ngx_str_t *str = cf->args->elts;
-    connect->errors = PQERRORS_DEFAULT;
-    connect->show_context = PQSHOW_CONTEXT_ERRORS;
-    connect->timeout = 60 * 1000;
-    for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
-        if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
-        if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
-        if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
-        if (str[i].len > sizeof("errors=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"errors=", sizeof("errors=") - 1)) {
-            str[i].data += sizeof("errors=") - 1;
-            str[i].len -= sizeof("errors=") - 1;
-            static const ngx_conf_enum_t e[] = { { ngx_string("default"), PQERRORS_DEFAULT }, { ngx_string("sqlstate"), PQERRORS_SQLSTATE }, { ngx_string("terse"), PQERRORS_TERSE }, { ngx_string("verbose"), PQERRORS_VERBOSE }, { ngx_null_string, 0 } };
-            ngx_uint_t j;
-            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
-            if (!e[j].name.len) return "\"errors\" value must be \"default\", \"sqlstate\", \"terse\" or \"verbose\"";
-            connect->errors = e[j].value;
-            continue;
-        }
-        if (str[i].len > sizeof("show_context=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"show_context=", sizeof("show_context=") - 1)) {
-            str[i].data += sizeof("show_context=") - 1;
-            str[i].len -= sizeof("show_context=") - 1;
-            static const ngx_conf_enum_t e[] = { { ngx_string("always"), PQSHOW_CONTEXT_ALWAYS }, { ngx_string("errors"), PQSHOW_CONTEXT_ERRORS }, { ngx_string("never"), PQSHOW_CONTEXT_NEVER }, { ngx_null_string, 0 } };
-            ngx_uint_t j;
-            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
-            if (!e[j].name.len) return "\"show_context\" value must be \"always\", \"errors\", or \"never\"";
-            connect->show_context = e[j].value;
-            continue;
-        }
-        if (str[i].len > sizeof("connect_timeout=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"connect_timeout=", sizeof("connect_timeout=") - 1)) {
-            str[i].data += sizeof("connect_timeout=") - 1;
-            str[i].len -= sizeof("connect_timeout=") - 1;
-            ngx_int_t n = ngx_parse_time(&str[i], 0);
-            if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
-            connect->timeout = (ngx_msec_t)n;
-            continue;
-        }
-        if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = str[i];
-        else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = str[i];
-        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
-        ngx_memzero(option, sizeof(*option));
-        *option = str[i];
-    }
-    if (!application_name.data) {
-        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
-        ngx_memzero(option, sizeof(*option));
-        ngx_str_set(option, "application_name=nginx");
-    }
-    return NGX_CONF_OK;
-}
-
-static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    ngx_pq_loc_conf_t *plcf = conf;
-    return ngx_pq_option_loc_ups_conf(cf, &plcf->connect);
-}
-
-static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    ngx_pq_srv_conf_t *pscf = conf;
-    ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
-    if (uscf->peer.init_upstream != ngx_pq_peer_init_upstream) {
-        pscf->peer.init_upstream = uscf->peer.init_upstream ? uscf->peer.init_upstream : ngx_http_upstream_init_round_robin;
-        uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
-    }
-    return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
-}
-
 typedef char *(*pq_func)(const PGconn *conn);
 
 static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
@@ -1412,6 +1342,76 @@ static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
   { ngx_null_string, 0 }
 };
+
+static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
+    if (connect->options.elts) return "is duplicate";
+    ngx_str_t *option;
+    if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    ngx_str_t application_name = ngx_null_string;
+    ngx_str_t *str = cf->args->elts;
+    connect->errors = PQERRORS_DEFAULT;
+    connect->show_context = PQSHOW_CONTEXT_ERRORS;
+    connect->timeout = 60 * 1000;
+    for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
+        if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
+        if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
+        if (str[i].len > sizeof("port=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"port=", sizeof("port=") - 1)) return "\"port\" option not allowed!";
+        if (str[i].len > sizeof("errors=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"errors=", sizeof("errors=") - 1)) {
+            str[i].data += sizeof("errors=") - 1;
+            str[i].len -= sizeof("errors=") - 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("default"), PQERRORS_DEFAULT }, { ngx_string("sqlstate"), PQERRORS_SQLSTATE }, { ngx_string("terse"), PQERRORS_TERSE }, { ngx_string("verbose"), PQERRORS_VERBOSE }, { ngx_null_string, 0 } };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
+            if (!e[j].name.len) return "\"errors\" value must be \"default\", \"sqlstate\", \"terse\" or \"verbose\"";
+            connect->errors = e[j].value;
+            continue;
+        }
+        if (str[i].len > sizeof("show_context=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"show_context=", sizeof("show_context=") - 1)) {
+            str[i].data += sizeof("show_context=") - 1;
+            str[i].len -= sizeof("show_context=") - 1;
+            static const ngx_conf_enum_t e[] = { { ngx_string("always"), PQSHOW_CONTEXT_ALWAYS }, { ngx_string("errors"), PQSHOW_CONTEXT_ERRORS }, { ngx_string("never"), PQSHOW_CONTEXT_NEVER }, { ngx_null_string, 0 } };
+            ngx_uint_t j;
+            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len && !ngx_strncmp(e[j].name.data, str[i].data, str[i].len))  break;
+            if (!e[j].name.len) return "\"show_context\" value must be \"always\", \"errors\", or \"never\"";
+            connect->show_context = e[j].value;
+            continue;
+        }
+        if (str[i].len > sizeof("connect_timeout=") - 1 && !ngx_strncmp(str[i].data, (u_char *)"connect_timeout=", sizeof("connect_timeout=") - 1)) {
+            str[i].data += sizeof("connect_timeout=") - 1;
+            str[i].len -= sizeof("connect_timeout=") - 1;
+            ngx_int_t n = ngx_parse_time(&str[i], 0);
+            if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
+            connect->timeout = (ngx_msec_t)n;
+            continue;
+        }
+        if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = str[i];
+        else if (str[i].len > sizeof("fallback_application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"fallback_application_name=", sizeof("fallback_application_name=") - 1)) application_name = str[i];
+        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
+        ngx_memzero(option, sizeof(*option));
+        *option = str[i];
+    }
+    if (!application_name.data) {
+        if (!(option = ngx_array_push(&connect->options))) return "!ngx_array_push";
+        ngx_memzero(option, sizeof(*option));
+        ngx_str_set(option, "application_name=nginx");
+    }
+    return NGX_CONF_OK;
+}
+
+static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    return ngx_pq_option_loc_ups_conf(cf, &plcf->connect);
+}
+
+static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
+    if (uscf->peer.init_upstream != ngx_pq_peer_init_upstream) {
+        pscf->peer.init_upstream = uscf->peer.init_upstream ? uscf->peer.init_upstream : ngx_http_upstream_init_round_robin;
+        uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
+    }
+    return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
+}
 
 static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
