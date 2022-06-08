@@ -1063,31 +1063,7 @@ static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
     return NGX_OK;
 }
 
-static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_int_t rc;
-    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
-    if (plcf->upstream.pass_request_body && (rc = ngx_http_discard_request_body(r)) != NGX_OK) return rc;
-    if (ngx_http_set_content_type(r) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_set_content_type != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    if (ngx_http_upstream_create(r) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_create != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    ngx_http_upstream_t *u = r->upstream;
-    ngx_str_set(&u->schema, "pq://");
-    u->output.tag = (ngx_buf_tag_t)&ngx_pq_module;
-    u->conf = &plcf->upstream;
-    r->state = 0;
-    u->abort_request = ngx_pq_abort_request;
-    u->create_request = ngx_pq_create_request;
-    u->finalize_request = ngx_pq_finalize_request;
-    u->process_header = ngx_pq_process_header;
-    u->reinit_request = ngx_pq_reinit_request;
-    u->buffering = u->conf->buffering;
-    if (!u->conf->request_buffering && u->conf->pass_request_body && !r->headers_in.chunked) r->request_body_no_buffering = 1;
-    if ((rc = ngx_http_read_client_request_body(r, ngx_http_upstream_init)) >= NGX_HTTP_SPECIAL_RESPONSE) return rc;
-    return NGX_DONE;
-}
-
 typedef char *(*pq_func)(const PGconn *conn);
-
 static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1105,7 +1081,6 @@ static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variabl
     v->not_found = 0;
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1122,7 +1097,6 @@ static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variab
     v->not_found = 0;
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1139,7 +1113,6 @@ static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_
     v->not_found = 0;
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1156,7 +1129,6 @@ static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable
     v->not_found = 0;
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1173,7 +1145,6 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
     v->not_found = 0;
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_transaction_status_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
@@ -1243,6 +1214,29 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_user"), NULL, ngx_pq_conn_get_handler, (uintptr_t)PQuser, NGX_HTTP_VAR_CHANGEABLE, 0 },
     ngx_http_null_variable
 };
+
+static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_int_t rc;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    if (plcf->upstream.pass_request_body && (rc = ngx_http_discard_request_body(r)) != NGX_OK) return rc;
+    if (ngx_http_set_content_type(r) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_set_content_type != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    if (ngx_http_upstream_create(r) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_create != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_str_set(&u->schema, "pq://");
+    u->output.tag = (ngx_buf_tag_t)&ngx_pq_module;
+    u->conf = &plcf->upstream;
+    r->state = 0;
+    u->abort_request = ngx_pq_abort_request;
+    u->create_request = ngx_pq_create_request;
+    u->finalize_request = ngx_pq_finalize_request;
+    u->process_header = ngx_pq_process_header;
+    u->reinit_request = ngx_pq_reinit_request;
+    u->buffering = u->conf->buffering;
+    if (!u->conf->request_buffering && u->conf->pass_request_body && !r->headers_in.chunked) r->request_body_no_buffering = 1;
+    if ((rc = ngx_http_read_client_request_body(r, ngx_http_upstream_init)) >= NGX_HTTP_SPECIAL_RESPONSE) return rc;
+    return NGX_DONE;
+}
 
 static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
