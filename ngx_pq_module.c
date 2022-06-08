@@ -244,6 +244,29 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
     return NGX_OK;
 }
 
+static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT");
+    char *buffer = NULL;
+    int len;
+    ngx_int_t rc = NGX_OK;
+    switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
+        case 0: break;
+        case -1: break;
+        case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
+        default:
+            if (!d) break;
+            if (ngx_queue_empty(&d->query.queue)) break;
+            ngx_queue_t *q = ngx_queue_head(&d->query.queue);
+            ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+            ngx_pq_query_t *query = qq->query;
+            d->query.type = query->type;
+            d->query.row++;
+            if (ngx_pq_output(s, d, query, (const u_char *)buffer, len) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+            break;
+    }
+    if (buffer) PQfreemem(buffer);
+    return rc;
+}
 static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK and %s", value); }
@@ -293,30 +316,6 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
         }
     }
     return NGX_OK;
-}
-
-static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT");
-    char *buffer = NULL;
-    int len;
-    ngx_int_t rc = NGX_OK;
-    switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
-        case 0: break;
-        case -1: break;
-        case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
-        default:
-            if (!d) break;
-            if (ngx_queue_empty(&d->query.queue)) break;
-            ngx_queue_t *q = ngx_queue_head(&d->query.queue);
-            ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-            ngx_pq_query_t *query = qq->query;
-            d->query.type = query->type;
-            d->query.row++;
-            if (ngx_pq_output(s, d, query, (const u_char *)buffer, len) != NGX_OK) rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
-            break;
-    }
-    if (buffer) PQfreemem(buffer);
-    return rc;
 }
 
 static ngx_int_t ngx_pq_copy_error(ngx_pq_data_t *d, PGresult *res, int fieldcode, ngx_uint_t offset) {
