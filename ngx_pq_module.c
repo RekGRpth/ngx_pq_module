@@ -910,11 +910,6 @@ static char *ngx_pq_execute_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *c
     return ngx_pq_execute_loc_ups_conf(cf, cmd, &pscf->queries);
 }
 
-static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    ngx_pq_srv_conf_t *pscf = conf;
-    return ngx_log_set_log(cf, &pscf->log);
-}
-
 static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
     ngx_pq_save_t *s = ev->data;
@@ -1327,6 +1322,11 @@ static ngx_http_module_t ngx_pq_ctx = {
     .create_loc_conf = ngx_pq_create_loc_conf,
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
+
+static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_log_set_log(cf, &pscf->log);
+}
 
 static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("error"), NGX_HTTP_UPSTREAM_FT_ERROR },
