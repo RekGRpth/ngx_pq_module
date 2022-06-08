@@ -1275,11 +1275,6 @@ static char *ngx_pq_query_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *con
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &plcf->queries);
 }
 
-static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    ngx_pq_srv_conf_t *pscf = conf;
-    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
-}
-
 typedef char *(*pq_func)(const PGconn *conn);
 
 static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
@@ -1507,6 +1502,11 @@ static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
   { ngx_null_string, 0 }
 };
+
+static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
+}
 
 static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
