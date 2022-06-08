@@ -600,7 +600,6 @@ static void ngx_pq_save_cln_handler(void *data) {
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
     }
 }
-
 static void ngx_pq_notice_processor(void *arg, const char *message) {
     ngx_pq_save_t *s = arg;
     ngx_pq_log_error(NGX_LOG_NOTICE, s->connection->log, 0, message, "PGRES_NONFATAL_ERROR");
