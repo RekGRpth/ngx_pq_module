@@ -1244,50 +1244,6 @@ static const ngx_http_variable_t ngx_pq_variables[] = {
     ngx_http_null_variable
 };
 
-static ngx_int_t ngx_pq_preconfiguration(ngx_conf_t *cf) {
-    ngx_http_variable_t *var;
-    for (ngx_http_variable_t *v = ngx_pq_variables; v->name.len; v++) {
-        if (!(var = ngx_http_add_variable(cf, &v->name, v->flags))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_http_add_variable"); return NGX_ERROR; }
-        *var = *v;
-    }
-    return NGX_OK;
-}
-
-static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
-    ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
-    if (!conf) return NULL;
-    conf->buffer_size = NGX_CONF_UNSET_SIZE;
-    return conf;
-}
-
-static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
-    ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
-    if (!conf) return NULL;
-    conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
-    conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
-    conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
-    conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
-    conf->upstream.pass_request_body = NGX_CONF_UNSET;
-    conf->upstream.request_buffering = NGX_CONF_UNSET;
-    ngx_str_set(&conf->upstream.module, "pq");
-    return conf;
-}
-
-static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
-    ngx_pq_loc_conf_t *prev = parent;
-    ngx_pq_loc_conf_t *conf = child;
-    if (!conf->upstream.upstream) conf->upstream = prev->upstream;
-    ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
-    ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
-    ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
-    ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
-    ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
-    ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
-    ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
-    if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
-    return NGX_CONF_OK;
-}
-
 static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
@@ -1301,7 +1257,6 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, query);
 }
-
 static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
     if (connect->options.elts) return "is duplicate";
     ngx_str_t *option;
@@ -1356,7 +1311,6 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
     }
     return NGX_CONF_OK;
 }
-
 static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
@@ -1411,21 +1365,59 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
     return ngx_pq_argument_output_loc_conf(cf, query);
 }
 
+static ngx_int_t ngx_pq_preconfiguration(ngx_conf_t *cf) {
+    ngx_http_variable_t *var;
+    for (ngx_http_variable_t *v = ngx_pq_variables; v->name.len; v++) {
+        if (!(var = ngx_http_add_variable(cf, &v->name, v->flags))) { ngx_log_error(NGX_LOG_EMERG, cf->log, 0, "!ngx_http_add_variable"); return NGX_ERROR; }
+        *var = *v;
+    }
+    return NGX_OK;
+}
+static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
+    ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
+    if (!conf) return NULL;
+    conf->buffer_size = NGX_CONF_UNSET_SIZE;
+    return conf;
+}
+static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
+    ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
+    if (!conf) return NULL;
+    conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
+    conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
+    conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
+    conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
+    conf->upstream.pass_request_body = NGX_CONF_UNSET;
+    conf->upstream.request_buffering = NGX_CONF_UNSET;
+    ngx_str_set(&conf->upstream.module, "pq");
+    return conf;
+}
+static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
+    ngx_pq_loc_conf_t *prev = parent;
+    ngx_pq_loc_conf_t *conf = child;
+    if (!conf->upstream.upstream) conf->upstream = prev->upstream;
+    ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
+    ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
+    ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
+    ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
+    ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
+    ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
+    ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
+    if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
+    return NGX_CONF_OK;
+}
+
 static char *ngx_pq_execute_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
     return ngx_pq_execute_loc_ups_conf(cf, cmd, &plcf->queries);
 }
-
 static char *ngx_pq_execute_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_pq_execute_loc_ups_conf(cf, cmd, &pscf->queries);
 }
-
 static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_log_set_log(cf, &pscf->log);
 }
-
 static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("error"), NGX_HTTP_UPSTREAM_FT_ERROR },
   { ngx_string("http_403"), NGX_HTTP_UPSTREAM_FT_HTTP_403 },
@@ -1440,12 +1432,10 @@ static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
   { ngx_null_string, 0 }
 };
-
 static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
     return ngx_pq_option_loc_ups_conf(cf, &plcf->connect);
 }
-
 static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
@@ -1455,7 +1445,6 @@ static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
     }
     return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
 }
-
 static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
     if (plcf->upstream.upstream || plcf->complex.value.data) return "is duplicate";
@@ -1476,22 +1465,18 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
     return NGX_CONF_OK;
 }
-
 static char *ngx_pq_prepare_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &plcf->queries);
 }
-
 static char *ngx_pq_prepare_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
 }
-
 static char *ngx_pq_query_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_loc_conf_t *plcf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &plcf->queries);
 }
-
 static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
@@ -1507,7 +1492,6 @@ static ngx_http_module_t ngx_pq_ctx = {
     .create_loc_conf = ngx_pq_create_loc_conf,
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
-
 static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
   { ngx_string("pq_buffer_size"), NGX_HTTP_UPS_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_SRV_CONF_OFFSET, offsetof(ngx_pq_srv_conf_t, buffer_size), NULL },
