@@ -255,6 +255,32 @@ static ngx_int_t ngx_pq_copy_error(ngx_pq_data_t *d, PGresult *res, int fieldcod
     return NGX_OK;
 }
 
+static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
+    char *value;
+    size_t len = 0;
+    if ((value = PQcmdStatus(res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(res)), value); }
+    else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(res))); }
+    if (s->query.count) { s->query.count--; return NGX_OK; }
+    if (!d) return NGX_OK;
+    if (ngx_queue_empty(&d->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    ngx_queue_t *q = ngx_queue_head(&d->query.queue);
+    ngx_queue_remove(q);
+    ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
+    ngx_pq_query_t *query = qq->query;
+    d->query.type = query->type;
+    if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
+        ngx_pq_command_t *command = query->commands.elts;
+        command = &command[1];
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%V", &command->str);
+        ngx_pq_channel_queue_t *cq;
+        ngx_connection_t *c = s->connection;
+        if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pcalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+        ngx_queue_insert_tail(&s->channel.queue, &cq->queue);
+        if (!(cq->channel.data = ngx_pstrdup(c->pool, &command->str))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pstrdup"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+        cq->channel.len = command->str.len;
+    }
+    return NGX_OK;
+}
 static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_COPY_OUT");
     char *buffer = NULL;
@@ -374,33 +400,6 @@ static ngx_int_t ngx_pq_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *re
     ngx_pq_query_t *query = qq->query;
     d->query.type = query->type;
     return NGX_HTTP_BAD_GATEWAY;
-}
-
-static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
-    char *value;
-    size_t len = 0;
-    if ((value = PQcmdStatus(res)) && (len = ngx_strlen(value))) { ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s and %s", PQresStatus(PQresultStatus(res)), value); }
-    else { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", PQresStatus(PQresultStatus(res))); }
-    if (s->query.count) { s->query.count--; return NGX_OK; }
-    if (!d) return NGX_OK;
-    if (ngx_queue_empty(&d->query.queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-    ngx_queue_t *q = ngx_queue_head(&d->query.queue);
-    ngx_queue_remove(q);
-    ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
-    ngx_pq_query_t *query = qq->query;
-    d->query.type = query->type;
-    if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
-        ngx_pq_command_t *command = query->commands.elts;
-        command = &command[1];
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%V", &command->str);
-        ngx_pq_channel_queue_t *cq;
-        ngx_connection_t *c = s->connection;
-        if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pcalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-        ngx_queue_insert_tail(&s->channel.queue, &cq->queue);
-        if (!(cq->channel.data = ngx_pstrdup(c->pool, &command->str))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pstrdup"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-        cq->channel.len = command->str.len;
-    }
-    return NGX_OK;
 }
 
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
