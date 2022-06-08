@@ -703,7 +703,6 @@ found:
     if (PQsetnonblocking(conn, 1) == -1) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(conn), "PQsetnonblocking == -1"); goto finish; }
     int fd;
     if ((fd = PQsocket(conn)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQsocket < 0"); goto finish; }
-    rc = NGX_ERROR;
     ngx_connection_t *c = ngx_get_connection(fd, pc->log);
     if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
     c->addr_text = *pc->name;
