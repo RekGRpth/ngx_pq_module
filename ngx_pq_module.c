@@ -1299,6 +1299,20 @@ static ngx_http_module_t ngx_pq_ctx = {
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
 
+static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
+    ngx_pq_query_t *query;
+    if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
+    ngx_memzero(query, sizeof(*query));
+    ngx_str_t *str = cf->args->elts;
+    if (ngx_http_script_variables_count(&str[1])) {
+        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &query->name.complex, 0, 0, 0};
+        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
+    } else query->name.str = str[1];
+    query->type = cmd->offset;
+    return ngx_pq_argument_output_loc_conf(cf, query);
+}
+
 static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
@@ -1350,20 +1364,6 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
         command->str.data = n;
         command->str.len = s - n;
     }
-    return ngx_pq_argument_output_loc_conf(cf, query);
-}
-
-static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
-    ngx_pq_query_t *query;
-    if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
-    if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
-    ngx_memzero(query, sizeof(*query));
-    ngx_str_t *str = cf->args->elts;
-    if (ngx_http_script_variables_count(&str[1])) {
-        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &query->name.complex, 0, 0, 0};
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
-    } else query->name.str = str[1];
-    query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, query);
 }
 
