@@ -172,19 +172,6 @@ typedef struct {
     ngx_int_t index;
 } ngx_pq_variable_t;
 
-static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
-    ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
-    if (!conf) return NULL;
-    conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
-    conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
-    conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
-    conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
-    conf->upstream.pass_request_body = NGX_CONF_UNSET;
-    conf->upstream.request_buffering = NGX_CONF_UNSET;
-    ngx_str_set(&conf->upstream.module, "pq");
-    return conf;
-}
-
 static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_pq_loc_conf_t *prev = parent;
     ngx_pq_loc_conf_t *conf = child;
@@ -1516,6 +1503,19 @@ static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
     ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
     conf->buffer_size = NGX_CONF_UNSET_SIZE;
+    return conf;
+}
+
+static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
+    ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
+    if (!conf) return NULL;
+    conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
+    conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
+    conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
+    conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
+    conf->upstream.pass_request_body = NGX_CONF_UNSET;
+    conf->upstream.request_buffering = NGX_CONF_UNSET;
+    ngx_str_set(&conf->upstream.module, "pq");
     return conf;
 }
 
