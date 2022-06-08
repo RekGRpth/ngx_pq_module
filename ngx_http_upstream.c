@@ -467,7 +467,6 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
         || (u->request_sent && r->request_body_no_buffering)
         || (timeout && ngx_current_msec - u->peer.start_time >= timeout))
     {
-
         ngx_http_upstream_finalize_request(r, u, status);
         return;
     }
@@ -534,7 +533,6 @@ ngx_http_upstream_finalize_request(ngx_http_request_t *r,
     }
 
     if (u->peer.connection) {
-
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "close http upstream connection: %d",
                        u->peer.connection->fd);
