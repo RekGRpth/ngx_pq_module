@@ -141,15 +141,13 @@ typedef struct {
     int inBufSize;
     ngx_array_t variables;
     ngx_connection_t *connection;
+    ngx_event_handler_pt handler;
     ngx_msec_t timeout;
     ngx_queue_t queue;
     PGconn *conn;
     struct {
         ngx_uint_t count;
     } query;
-    struct {
-        ngx_event_handler_pt handler;
-    } read;
 } ngx_pq_save_t;
 
 typedef struct {
@@ -707,7 +705,7 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
     ev->data = c;
-    s->read.handler(ev);
+    s->handler(ev);
     ev->data = s;
 }
 
@@ -760,7 +758,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_connection_t *c = s->connection;
     if (!c) return;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
-    s->read.handler = c->read->handler;
+    s->handler = c->read->handler;
     c->read->data = s;
     c->read->handler = ngx_pq_read_handler;
     if (!pscf->log) return;
