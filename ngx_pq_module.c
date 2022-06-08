@@ -172,13 +172,6 @@ typedef struct {
     ngx_int_t index;
 } ngx_pq_variable_t;
 
-static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
-    ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
-    if (!conf) return NULL;
-    conf->buffer_size = NGX_CONF_UNSET_SIZE;
-    return conf;
-}
-
 static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
@@ -612,6 +605,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
     ngx_connection_t *c = s->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "s = %p", s);
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     if (s->conn) PQfinish(s->conn);
     s->conn = NULL;
@@ -714,6 +708,7 @@ found:
     c->write->log = pc->log;
     if (!c->pool && !(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "s = %p", s);
     s->inBufSize = ngx_max(conn->inBufSize, (int)buffer_size);
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
     ngx_queue_init(&s->channel.queue);
@@ -986,6 +981,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
     ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
     if (!pscf) return;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "s = %p", s);
     ngx_connection_t *c = s->connection;
     if (!c) return;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
@@ -1514,6 +1510,13 @@ static ngx_int_t ngx_pq_preconfiguration(ngx_conf_t *cf) {
         *var = *v;
     }
     return NGX_OK;
+}
+
+static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
+    ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
+    if (!conf) return NULL;
+    conf->buffer_size = NGX_CONF_UNSET_SIZE;
+    return conf;
 }
 
 static ngx_http_module_t ngx_pq_ctx = {
