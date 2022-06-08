@@ -89,7 +89,7 @@ typedef struct {
         ngx_flag_t string;
         ngx_int_t index;
         ngx_str_t null;
-        ngx_uint_t type;
+        ngx_uint_t output;
         u_char delimiter;
         u_char escape;
         u_char quote;
@@ -216,7 +216,7 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
         cl->next = NULL;
         if (!(cl->buf = ngx_create_temp_buf(c->pool, len))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
         cl->buf->last = ngx_copy(cl->buf->last, data, len);
-    } else if (query->output.type) {
+    } else if (query->output.output) {
         ngx_http_upstream_t *u = r->upstream;
         ngx_chain_t *cl, **ll;
         for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
@@ -1144,8 +1144,8 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             static const ngx_conf_enum_t e[] = { { ngx_string("csv"), ngx_pq_output_csv }, { ngx_string("plain"), ngx_pq_output_plain }, { ngx_string("value"), ngx_pq_output_value }, { ngx_null_string, 0 } };
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("output=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("output=") - 1], str[i].len - (sizeof("output=") - 1))) break;
             if (!e[j].name.len) return "\"output\" value must be \"csv\", \"plain\" or \"value\"";
-            query->output.type = e[j].value;
-            switch (query->output.type) {
+            query->output.output = e[j].value;
+            switch (query->output.output) {
                 case ngx_pq_output_csv: {
                     ngx_str_set(&query->output.null, "");
                     query->output.delimiter = ',';
