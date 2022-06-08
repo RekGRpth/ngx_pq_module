@@ -972,55 +972,6 @@ static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv
     return NGX_OK;
 }
 
-static void ngx_pq_abort_request(ngx_http_request_t *r) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-}
-
-static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_upstream_t *u = r->upstream;
-    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
-    if (uscf->peer.init != ngx_pq_peer_init) ngx_log_error(NGX_LOG_WARN, r->connection->log, 0, "uscf->peer.init != ngx_pq_peer_init");
-    uscf->peer.init = ngx_pq_peer_init;
-    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
-    if (plcf->complex.value.data) {
-        ngx_str_t host;
-        if (ngx_http_complex_value(r, &plcf->complex, &host) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
-        if (!host.len) { ngx_http_core_loc_conf_t *clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module); ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "empty \"pq_pass\" (was: \"%V\") in location \"%V\"", &plcf->complex.value, &clcf->name); return NGX_ERROR; }
-        if (!(u->resolved = ngx_pcalloc(r->pool, sizeof(*u->resolved)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-        u->resolved->host = host;
-        u->resolved->no_port = 1;
-    }
-    if (!plcf->queries.nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries"); return NGX_ERROR; }
-    u->request_sent = 1; // force to reinit_request
-    return NGX_OK;
-}
-
-static ngx_int_t ngx_pq_process_header(ngx_http_request_t *r) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    return NGX_OK;
-}
-
-static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
-    ngx_http_upstream_t *u = r->upstream;
-    u->keepalive = !u->headers_in.connection_close;
-    u->request_body_sent = 1;
-    ngx_pq_data_t *d = u->peer.data;
-    ngx_pq_save_t *s = d->save;
-    if (!s) return;
-    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
-    if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
-    r->headers_out.content_length_n = 0;
-    for (ngx_chain_t *cl = u->out_bufs; cl; cl = cl->next) r->headers_out.content_length_n += cl->buf->last - cl->buf->pos;
-    rc = ngx_http_send_header(r);
-    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
-    u->header_sent = 1;
-    if (!u->out_bufs) return;
-    if (ngx_http_output_filter(r, u->out_bufs) != NGX_OK) return;
-    ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
-}
-
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
     ngx_pq_data_t *d = u->peer.data;
     ngx_pq_save_t *s = d->save;
@@ -1054,6 +1005,51 @@ ret:
     }
 }
 
+static void ngx_pq_abort_request(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+}
+static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+    if (uscf->peer.init != ngx_pq_peer_init) ngx_log_error(NGX_LOG_WARN, r->connection->log, 0, "uscf->peer.init != ngx_pq_peer_init");
+    uscf->peer.init = ngx_pq_peer_init;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    if (plcf->complex.value.data) {
+        ngx_str_t host;
+        if (ngx_http_complex_value(r, &plcf->complex, &host) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
+        if (!host.len) { ngx_http_core_loc_conf_t *clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module); ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "empty \"pq_pass\" (was: \"%V\") in location \"%V\"", &plcf->complex.value, &clcf->name); return NGX_ERROR; }
+        if (!(u->resolved = ngx_pcalloc(r->pool, sizeof(*u->resolved)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+        u->resolved->host = host;
+        u->resolved->no_port = 1;
+    }
+    if (!plcf->queries.nelts) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!queries"); return NGX_ERROR; }
+    u->request_sent = 1; // force to reinit_request
+    return NGX_OK;
+}
+static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
+    ngx_http_upstream_t *u = r->upstream;
+    u->keepalive = !u->headers_in.connection_close;
+    u->request_body_sent = 1;
+    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_save_t *s = d->save;
+    if (!s) return;
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
+    if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
+    r->headers_out.content_length_n = 0;
+    for (ngx_chain_t *cl = u->out_bufs; cl; cl = cl->next) r->headers_out.content_length_n += cl->buf->last - cl->buf->pos;
+    rc = ngx_http_send_header(r);
+    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return;
+    u->header_sent = 1;
+    if (!u->out_bufs) return;
+    if (ngx_http_output_filter(r, u->out_bufs) != NGX_OK) return;
+    ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
+}
+static ngx_int_t ngx_pq_process_header(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    return NGX_OK;
+}
 static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
