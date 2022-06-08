@@ -1185,27 +1185,6 @@ static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
     return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
 }
 
-static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
-    ngx_pq_loc_conf_t *plcf = conf;
-    if (plcf->upstream.upstream || plcf->complex.value.data) return "is duplicate";
-    ngx_http_core_loc_conf_t *clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-    clcf->handler = ngx_pq_handler;
-    if (clcf->name.data[clcf->name.len - 1] == '/') clcf->auto_redirect = 1;
-    ngx_str_t *str = cf->args->elts;
-    if (ngx_http_script_variables_count(&str[1])) {
-        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &plcf->complex, 0, 0, 0};
-        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
-        return NGX_CONF_OK;
-    }
-    ngx_url_t url = {0};
-    if (!plcf->connect.options.elts) url.no_resolve = 1;
-    url.url = str[1];
-    if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
-    ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
-    uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
-    return NGX_CONF_OK;
-}
-
 typedef char *(*pq_func)(const PGconn *conn);
 
 static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
@@ -1433,6 +1412,27 @@ static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("updating"), NGX_HTTP_UPSTREAM_FT_UPDATING },
   { ngx_null_string, 0 }
 };
+
+static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_loc_conf_t *plcf = conf;
+    if (plcf->upstream.upstream || plcf->complex.value.data) return "is duplicate";
+    ngx_http_core_loc_conf_t *clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
+    clcf->handler = ngx_pq_handler;
+    if (clcf->name.data[clcf->name.len - 1] == '/') clcf->auto_redirect = 1;
+    ngx_str_t *str = cf->args->elts;
+    if (ngx_http_script_variables_count(&str[1])) {
+        ngx_http_compile_complex_value_t ccv = {cf, &str[1], &plcf->complex, 0, 0, 0};
+        if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
+        return NGX_CONF_OK;
+    }
+    ngx_url_t url = {0};
+    if (!plcf->connect.options.elts) url.no_resolve = 1;
+    url.url = str[1];
+    if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
+    ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
+    uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
+    return NGX_CONF_OK;
+}
 
 static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
