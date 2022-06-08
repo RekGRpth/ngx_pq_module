@@ -394,7 +394,7 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_OK;
     ngx_pool_t *p;
-    for (PGnotify *notify; PQstatus(s->conn) == CONNECTION_OK && (notify = PQnotifies(s->conn)); PQfreemem(notify)) {
+    for (PGnotify *notify; (notify = PQnotifies(s->conn)); PQfreemem(notify)) {
         ngx_log_debug3(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "relname=%s, extra=%s, be_pid=%i", notify->relname, notify->extra, notify->be_pid);
         if (!ngx_http_push_stream_add_msg_to_channel_my) continue;
         ngx_str_t id = { ngx_strlen(notify->relname), (u_char *)notify->relname };
@@ -545,7 +545,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
     ngx_int_t rc = NGX_OK;
-    for (PGresult *res; PQstatus(s->conn) == CONNECTION_OK && ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))); PQclear(res)) switch (PQresultStatus(res)) {
+    for (PGresult *res; ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))); PQclear(res)) switch (PQresultStatus(res)) {
         case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
         case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
         case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
@@ -688,7 +688,7 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
     ngx_pq_save_t *s = ev->data;
     ngx_connection_t *c = s->connection;
-    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout && PQstatus(s->conn) == CONNECTION_OK) {
+    if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout) {
         if (s->timeout) ngx_add_timer(c->read, s->timeout);
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
@@ -710,7 +710,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_connection_t *c = pc->connection;
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = d->save = cln->data;
-        if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR; }
+//        if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR; }
         c->read->data = c;
         return ngx_pq_queries(s, d, ngx_pq_type_location);
     }
@@ -794,8 +794,8 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     ngx_pq_save_t *s = d->save;
     ngx_int_t rc = NGX_AGAIN;
     ngx_connection_t *c = s->connection;
-    if (c->read->timedout) { c->read->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
-    if (c->write->timedout) { c->write->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
+//    if (c->read->timedout) { c->read->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
+//    if (c->write->timedout) { c->write->timedout = 0; return PQstatus(s->conn) == CONNECTION_OK ? ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT) : ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT); }
     if (ngx_http_upstream_test_connect(c) != NGX_OK) return ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_ERROR);
     switch (PQstatus(s->conn)) {
         case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
