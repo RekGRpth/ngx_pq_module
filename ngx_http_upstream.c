@@ -1,3 +1,15 @@
+
+/*
+ * Copyright (C) Igor Sysoev
+ * Copyright (C) Nginx, Inc.
+ */
+
+
+#include <ngx_config.h>
+#include <ngx_core.h>
+#include <ngx_http.h>
+
+
 static void ngx_http_upstream_connect(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
 static ngx_int_t ngx_http_upstream_reinit(ngx_http_request_t *r,
@@ -257,14 +269,6 @@ ngx_http_upstream_reinit(ngx_http_request_t *r, ngx_http_upstream_t *u)
 
     u->buffer.pos = u->buffer.start;
 
-#if (NGX_HTTP_CACHE)
-
-    if (r->cache) {
-        u->buffer.pos += r->cache->header_start;
-    }
-
-#endif
-
     u->buffer.last = u->buffer.pos;
 
     return NGX_OK;
@@ -472,15 +476,6 @@ ngx_http_upstream_next(ngx_http_request_t *r, ngx_http_upstream_t *u,
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "close http upstream connection: %d",
                        u->peer.connection->fd);
-#if (NGX_HTTP_SSL)
-
-        if (u->peer.connection->ssl) {
-            u->peer.connection->ssl->no_wait_shutdown = 1;
-            u->peer.connection->ssl->no_send_shutdown = 1;
-
-            (void) ngx_ssl_shutdown(u->peer.connection);
-        }
-#endif
 
         if (u->peer.connection->pool) {
             ngx_destroy_pool(u->peer.connection->pool);
@@ -540,24 +535,6 @@ ngx_http_upstream_finalize_request(ngx_http_request_t *r,
 
     if (u->peer.connection) {
 
-#if (NGX_HTTP_SSL)
-
-        /* TODO: do not shutdown persistent connection */
-
-        if (u->peer.connection->ssl) {
-
-            /*
-             * We send the "close notify" shutdown alert to the upstream only
-             * and do not wait its "close notify" shutdown alert.
-             * It is acceptable according to the TLS standard.
-             */
-
-            u->peer.connection->ssl->no_wait_shutdown = 1;
-
-            (void) ngx_ssl_shutdown(u->peer.connection);
-        }
-#endif
-
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
                        "close http upstream connection: %d",
                        u->peer.connection->fd);
@@ -588,29 +565,6 @@ ngx_http_upstream_finalize_request(ngx_http_request_t *r,
                           u->pipe->temp_file->file.name.data);
         }
     }
-
-#if (NGX_HTTP_CACHE)
-
-    if (r->cache) {
-
-        if (u->cacheable) {
-
-            if (rc == NGX_HTTP_BAD_GATEWAY || rc == NGX_HTTP_GATEWAY_TIME_OUT) {
-                time_t  valid;
-
-                valid = ngx_http_file_cache_valid(u->conf->cache_valid, rc);
-
-                if (valid) {
-                    r->cache->valid_sec = ngx_time() + valid;
-                    r->cache->error = rc;
-                }
-            }
-        }
-
-        ngx_http_file_cache_free(r->cache, u->pipe->temp_file);
-    }
-
-#endif
 
     r->read_event_handler = ngx_http_block_reading;
 
