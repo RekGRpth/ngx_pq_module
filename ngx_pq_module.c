@@ -400,7 +400,6 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
     }
     return NGX_OK;
 }
-
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_OK;
@@ -446,7 +445,6 @@ destroy:
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
     return rc;
 }
-
 static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t type) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     ngx_http_request_t *r = d->request;
@@ -542,6 +540,23 @@ ret:
     return rc;
 }
 
+static ngx_int_t ngx_pq_connect(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    switch (PQstatus(s->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "CONNECTION_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
+        default: break;
+    }
+    ngx_connection_t *c = s->connection;
+again:
+    switch (PQconnectPoll(s->conn)) {
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); break;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; goto again;
+    }
+    return NGX_AGAIN;
+}
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
@@ -584,24 +599,6 @@ static void ngx_pq_save_cln_handler(void *data) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
     }
-}
-
-static ngx_int_t ngx_pq_connect(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    switch (PQstatus(s->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_ERROR;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "CONNECTION_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
-        default: break;
-    }
-    ngx_connection_t *c = s->connection;
-again:
-    switch (PQconnectPoll(s->conn)) {
-        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); break;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
-        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
-        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
-        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; goto again;
-    }
-    return NGX_AGAIN;
 }
 
 static void ngx_pq_notice_processor(void *arg, const char *message) {
