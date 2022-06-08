@@ -713,7 +713,7 @@ found:
     c->start_time = ngx_current_msec;
     c->type = pc->type ? pc->type : SOCK_STREAM;
     c->write->log = pc->log;
-    if (!c->pool && !(c->pool = ngx_create_pool(128 + sizeof(*s), pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
+    if (!c->pool && !(c->pool = ngx_create_pool(128, pc->log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
     if (!(s = d->save = ngx_pcalloc(c->pool, sizeof(*s)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
     s->inBufSize = ngx_max(conn->inBufSize, (int)buffer_size);
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
@@ -722,8 +722,6 @@ found:
     if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
     cln->data = s;
     cln->handler = ngx_pq_save_cln_handler;
-    s->conn = conn;
-    s->connection = c;
     if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
         if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
     } else {
@@ -732,9 +730,10 @@ found:
     }
     pc->connection = c;
     rc = NGX_AGAIN;
+    s->conn = conn;
+    s->connection = c;
     goto term;
 destroy:
-    s->conn = NULL;
     ngx_destroy_pool(c->pool);
 close:
     ngx_close_connection(c);
