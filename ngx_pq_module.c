@@ -142,10 +142,8 @@ typedef struct {
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_msec_t timeout;
+    ngx_queue_t queue;
     PGconn *conn;
-    struct {
-        ngx_queue_t queue;
-    } channel;
     struct {
         ngx_uint_t count;
     } query;
@@ -273,7 +271,7 @@ static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGres
         ngx_pq_channel_queue_t *cq;
         ngx_connection_t *c = s->connection;
         if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pcalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
-        ngx_queue_insert_tail(&s->channel.queue, &cq->queue);
+        ngx_queue_insert_tail(&s->queue, &cq->queue);
         if (!(cq->channel.data = ngx_pstrdup(c->pool, &command->str))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pstrdup"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
         cq->channel.len = command->str.len;
     }
@@ -411,7 +409,7 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
         if (rc == NGX_OK) switch ((rc = ngx_http_push_stream_add_msg_to_channel_my(s->connection->log, &id, &text, NULL, NULL, 1, p))) {
             case NGX_ERROR: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_ERROR"); break;
             case NGX_DECLINED: ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_DECLINED"); {
-                for (ngx_queue_t *q = ngx_queue_head(&s->channel.queue), *_; q != ngx_queue_sentinel(&s->channel.queue) && (_ = ngx_queue_next(q)); q = _) {
+                for (ngx_queue_t *q = ngx_queue_head(&s->queue), *_; q != ngx_queue_sentinel(&s->queue) && (_ = ngx_queue_next(q)); q = _) {
                     ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
                     if (cq->channel.len != id.len || ngx_strncmp(cq->channel.data, id.data, id.len)) continue;
                     ngx_queue_remove(q);
@@ -590,8 +588,8 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     if (s->conn) PQfinish(s->conn);
     s->conn = NULL;
-    if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->channel.queue)) {
-        ngx_queue_t *q = ngx_queue_head(&s->channel.queue);
+    if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->queue)) {
+        ngx_queue_t *q = ngx_queue_head(&s->queue);
         ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
         ngx_queue_remove(q);
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
@@ -673,7 +671,7 @@ found:
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "s = %p", s);
     s->inBufSize = ngx_max(conn->inBufSize, (int)buffer_size);
     (void)PQsetNoticeProcessor(conn, ngx_pq_notice_processor, s);
-    ngx_queue_init(&s->channel.queue);
+    ngx_queue_init(&s->queue);
     ngx_pool_cleanup_t *cln;
     if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
     cln->data = s;
