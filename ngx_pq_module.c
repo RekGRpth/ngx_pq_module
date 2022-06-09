@@ -432,7 +432,9 @@ term:
             case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == NGX_OK"); break;
             default: ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_http_push_stream_add_msg_to_channel_my == %i", rc); break;
         }
+#ifdef LIBPQ_HAS_PIPELINING
 destroy:
+#endif
         ngx_destroy_pool(p);
     }
 #ifdef LIBPQ_HAS_PIPELINING
