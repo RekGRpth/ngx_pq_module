@@ -714,21 +714,21 @@ term:
 static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
-    if (c->pool) for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = cln->data;
         if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout) {
             if (s->timeout) ngx_add_timer(c->read, s->timeout);
             if (ngx_pq_result(s, NULL) == NGX_OK) return;
         }
-        s->read(ev);
+        return s->read(ev);
     }
 }
 static void ngx_pq_write_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
-    if (c->pool) for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = cln->data;
-        s->write(ev);
+        return s->write(ev);
     }
 }
 
