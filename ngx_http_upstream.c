@@ -14,7 +14,6 @@ static void ngx_http_upstream_connect(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
 static ngx_int_t ngx_http_upstream_reinit(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
-static ngx_int_t ngx_http_upstream_test_connect(ngx_connection_t *c);
 static ngx_int_t ngx_http_upstream_process_trailers(ngx_http_request_t *r,
     ngx_http_upstream_t *u);
 static void ngx_http_upstream_next(ngx_http_request_t *r,
@@ -270,57 +269,6 @@ ngx_http_upstream_reinit(ngx_http_request_t *r, ngx_http_upstream_t *u)
     u->buffer.pos = u->buffer.start;
 
     u->buffer.last = u->buffer.pos;
-
-    return NGX_OK;
-}
-
-
-static ngx_int_t
-ngx_http_upstream_test_connect(ngx_connection_t *c)
-{
-    int        err;
-    socklen_t  len;
-
-#if (NGX_HAVE_KQUEUE)
-
-    if (ngx_event_flags & NGX_USE_KQUEUE_EVENT)  {
-        if (c->write->pending_eof || c->read->pending_eof) {
-            if (c->write->pending_eof) {
-                err = c->write->kq_errno;
-
-            } else {
-                err = c->read->kq_errno;
-            }
-
-            c->log->action = "connecting to upstream";
-            (void) ngx_connection_error(c, err,
-                                    "kevent() reported that connect() failed");
-            return NGX_ERROR;
-        }
-
-    } else
-#endif
-    {
-        err = 0;
-        len = sizeof(int);
-
-        /*
-         * BSDs and Linux return 0 and set a pending error in err
-         * Solaris returns -1 and sets errno
-         */
-
-        if (getsockopt(c->fd, SOL_SOCKET, SO_ERROR, (void *) &err, &len)
-            == -1)
-        {
-            err = ngx_socket_errno;
-        }
-
-        if (err) {
-            c->log->action = "connecting to upstream";
-            (void) ngx_connection_error(c, err, "connect() failed");
-            return NGX_ERROR;
-        }
-    }
 
     return NGX_OK;
 }
