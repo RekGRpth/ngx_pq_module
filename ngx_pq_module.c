@@ -139,7 +139,8 @@ typedef struct {
     int inBufSize;
     ngx_array_t variables;
     ngx_connection_t *connection;
-    ngx_event_handler_pt handler;
+    ngx_event_handler_pt read;
+    ngx_event_handler_pt write;
     ngx_msec_t timeout;
     ngx_queue_t queue;
     ngx_uint_t count;
@@ -693,7 +694,15 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         if (ngx_pq_result(s, NULL) == NGX_OK) return;
     }
     ev->data = c;
-    s->handler(ev);
+    s->read(ev);
+    ev->data = s;
+}
+static void ngx_pq_write_handler(ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0, "%s", __func__);
+    ngx_pq_save_t *s = ev->data;
+    ngx_connection_t *c = s->connection;
+    ev->data = c;
+    s->write(ev);
     ev->data = s;
 }
 
@@ -745,9 +754,11 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     ngx_connection_t *c = s->connection;
     if (!c) return;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
-    s->handler = c->read->handler;
+    s->read = c->read->handler;
+    s->write = c->write->handler;
     c->read->data = s;
     c->read->handler = ngx_pq_read_handler;
+    c->write->handler = ngx_pq_write_handler;
     if (!pscf->log) return;
     c->log = pscf->log;
     c->pool->log = c->log;
