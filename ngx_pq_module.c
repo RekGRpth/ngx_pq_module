@@ -597,6 +597,12 @@ static void ngx_pq_save_cln_handler(void *data) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
     }
+    if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
+        ngx_del_conn(c, NGX_CLOSE_EVENT);
+    } else {
+        ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
+        ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
+    }
 }
 static void ngx_pq_notice_processor(void *arg, const char *message) {
     ngx_pq_save_t *s = arg;
