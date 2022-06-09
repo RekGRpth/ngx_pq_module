@@ -588,6 +588,12 @@ static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
+    if (ngx_del_conn) {
+        ngx_del_conn(c, NGX_CLOSE_EVENT);
+    } else {
+        ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
+        ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
+    }
     if (s->conn) PQfinish(s->conn);
     s->conn = NULL;
     if (!ngx_terminate && !ngx_exiting && !c->error) while (!ngx_queue_empty(&s->queue)) {
@@ -596,12 +602,6 @@ static void ngx_pq_save_cln_handler(void *data) {
         ngx_queue_remove(q);
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
-    }
-    if (ngx_del_conn) {
-        ngx_del_conn(c, NGX_CLOSE_EVENT);
-    } else {
-        ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
-        ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
     }
 }
 static void ngx_pq_notice_processor(void *arg, const char *message) {
@@ -698,6 +698,12 @@ destroy:
     ngx_destroy_pool(c->pool);
 close:
     ngx_close_connection(c);
+    if (ngx_del_conn) {
+        ngx_del_conn(c, NGX_CLOSE_EVENT);
+    } else {
+        ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
+        ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
+    }
 finish:
     PQfinish(conn);
 term:
