@@ -410,7 +410,9 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
                     ngx_queue_remove(q);
                     break;
                 }
+#ifdef LIBPQ_HAS_PIPELINING
                 if (PQpipelineStatus(s->conn) == PQ_PIPELINE_OFF) if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); rc = NGX_ERROR; goto destroy; }
+#endif
                 PQExpBufferData sql;
                 initPQExpBuffer(&sql);
                 appendPQExpBufferStr(&sql, "UNLISTEN ");
@@ -433,7 +435,9 @@ term:
 destroy:
         ngx_destroy_pool(p);
     }
+#ifdef LIBPQ_HAS_PIPELINING
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
+#endif
     return rc;
 }
 static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t type) {
@@ -450,7 +454,9 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
     PQExpBufferData sql;
     initPQExpBuffer(&name);
     initPQExpBuffer(&sql);
+#ifdef LIBPQ_HAS_PIPELINING
     if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); goto ret; }
+#endif
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
     ngx_array_t *queries = &plcf->queries;
@@ -520,7 +526,9 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
             }
         }
     }
+#ifdef LIBPQ_HAS_PIPELINING
     if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); goto ret; }
+#endif
     c->read->active = 1;
     c->write->active = 0;
     rc = NGX_AGAIN;
@@ -550,11 +558,15 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
         case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
         case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
+#ifdef LIBPQ_HAS_PIPELINING
         case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC"); break;
+#endif
         case PGRES_TUPLES_OK: rc = ngx_pq_res_tuples_ok(s, d, res); break;
         default: rc = ngx_pq_res_default(s, d, res); break;
     }
+#ifdef LIBPQ_HAS_PIPELINING
     if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
+#endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
     if (!d) return rc;
