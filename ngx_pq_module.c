@@ -597,7 +597,7 @@ static void ngx_pq_save_cln_handler(void *data) {
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "channel = %V", &cq->channel);
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
     }
-    if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
+    if (ngx_del_conn) {
         ngx_del_conn(c, NGX_CLOSE_EVENT);
     } else {
         ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
@@ -683,7 +683,7 @@ found:
     if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
     cln->data = s;
     cln->handler = ngx_pq_save_cln_handler;
-    if (ngx_event_flags & NGX_USE_RTSIG_EVENT) {
+    if (ngx_add_conn) {
         if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
     } else {
         if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
