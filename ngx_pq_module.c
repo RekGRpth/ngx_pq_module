@@ -951,7 +951,7 @@ static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variabl
     if (!s) return NGX_OK;
     pq_func function = (pq_func)data;
     if (!(v->data = (u_char *)function(s->conn))) return NGX_OK;
-    v->len = ngx_strlen(v->data);
+    if (!(v->len = ngx_strlen(v->data))) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
@@ -965,9 +965,8 @@ static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variab
     if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
     ngx_pq_data_t *d = u->peer.data;
     ngx_str_t *error = (ngx_str_t *)((u_char *)&d->error + data);
-    if (!error->len) return NGX_OK;
     v->data = error->data;
-    v->len = error->len;
+    if (!(v->len = error->len)) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
@@ -983,7 +982,7 @@ static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = PQparameterStatus(s->conn, (char *)data))) return NGX_OK;
-    v->len = ngx_strlen(v->data);
+    if (!(v->len = ngx_strlen(v->data))) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
@@ -999,7 +998,7 @@ static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = ngx_pnalloc(r->pool, NGX_INT32_LEN))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
-    v->len = ngx_sprintf(v->data, "%uD", PQbackendPID(s->conn)) - v->data;
+    if (!(v->len = ngx_sprintf(v->data, "%uD", PQbackendPID(s->conn)) - v->data)) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
@@ -1015,7 +1014,7 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = PQsslAttribute(s->conn, (char *)data))) return NGX_OK;
-    v->len = ngx_strlen(v->data);
+    if (!(v->len = ngx_strlen(v->data))) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
     v->not_found = 0;
