@@ -556,7 +556,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_HTTP_BAD_GATEWAY; }
     ngx_int_t rc = NGX_OK;
-    for (PGresult *res; ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))); PQclear(res)) switch (PQresultStatus(res)) {
+    for (PGresult *res; ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))) && PQstatus(s->conn) == CONNECTION_OK; PQclear(res)) switch (PQresultStatus(res)) {
         case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
         case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
         case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
@@ -567,7 +567,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         default: rc = ngx_pq_res_default(s, d, res); break;
     }
 #ifdef LIBPQ_HAS_PIPELINING
-    if (!PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
+    if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_HTTP_BAD_GATEWAY; }
 #endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
