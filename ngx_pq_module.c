@@ -280,7 +280,7 @@ static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
         case 0: break;
         case -1: break;
-        case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_DECLINED; break;
+        case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
         default:
             if (!d) break;
             if (ngx_queue_empty(&d->queue)) break;
@@ -307,7 +307,7 @@ static ngx_int_t ngx_pq_res_default(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
-    return NGX_DECLINED;
+    return NGX_HTTP_BAD_GATEWAY;
 }
 static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
@@ -570,14 +570,14 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
 #endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
-    if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_DECLINED; }
+    if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
     if (!d) return rc;
-    if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_DECLINED; }
+    if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
     if (rc == NGX_OK && d->type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
     if (s->conn->inBufSize > s->inBufSize) {
         ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
         char *newbuf;
-        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!realloc"); return NGX_DECLINED; }
+        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
         s->conn->inBuffer = newbuf;
         s->conn->inBufSize = s->inBufSize;
     }
