@@ -339,7 +339,7 @@ static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGre
     if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FILE, offsetof(ngx_pq_error_t, source_file)) != NGX_OK) return NGX_ERROR;
     if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_LINE, offsetof(ngx_pq_error_t, source_line)) != NGX_OK) return NGX_ERROR;
     if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FUNCTION, offsetof(ngx_pq_error_t, source_function)) != NGX_OK) return NGX_ERROR;
-    return NGX_DECLINED;
+    return NGX_HTTP_BAD_GATEWAY;
 }
 static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
