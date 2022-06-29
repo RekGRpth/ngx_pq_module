@@ -802,6 +802,7 @@ static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_c
     u->peer.data = d;
     u->peer.free = ngx_pq_peer_free;
     u->peer.get = ngx_pq_peer_get;
+    ngx_http_set_ctx(r, d, ngx_pq_module);
     return NGX_OK;
 }
 
@@ -819,7 +820,7 @@ static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv
 }
 
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     ngx_pq_save_t *s = d->save;
     ngx_connection_t *c = s->connection;
     ngx_int_t rc = NGX_AGAIN;
@@ -877,7 +878,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_http_upstream_t *u = r->upstream;
     u->keepalive = !u->headers_in.connection_close;
     u->request_body_sent = 1;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
@@ -909,8 +910,8 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     ngx_int_t index = data;
@@ -949,8 +950,8 @@ static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variabl
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     pq_func function = (pq_func)data;
@@ -966,8 +967,8 @@ static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variab
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_str_t *error = (ngx_str_t *)((u_char *)&d->error + data);
     v->data = error->data;
     if (!(v->len = error->len)) return NGX_OK;
@@ -981,8 +982,8 @@ static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = PQparameterStatus(s->conn, (char *)data))) return NGX_OK;
@@ -997,8 +998,8 @@ static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = ngx_pnalloc(r->pool, NGX_INT32_LEN))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_ERROR; }
@@ -1013,8 +1014,8 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     if (!(v->data = PQsslAttribute(s->conn, (char *)data))) return NGX_OK;
@@ -1029,8 +1030,8 @@ static ngx_int_t ngx_pq_transaction_status_get_handler(ngx_http_request_t *r, ng
     v->not_found = 1;
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
-    if (u->peer.get != ngx_pq_peer_get) return NGX_OK;
-    ngx_pq_data_t *d = u->peer.data;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
     switch (PQtransactionStatus(s->conn)) {
