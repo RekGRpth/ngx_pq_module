@@ -859,9 +859,9 @@ static void ngx_pq_abort_request(ngx_http_request_t *r) {
 static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_upstream_t *u = r->upstream;
-    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
-    if (uscf->peer.init != ngx_pq_peer_init) ngx_log_error(NGX_LOG_WARN, r->connection->log, 0, "uscf->peer.init != ngx_pq_peer_init");
-    uscf->peer.init = ngx_pq_peer_init;
+//    ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+//    if (uscf->peer.init != ngx_pq_peer_init) ngx_log_error(NGX_LOG_WARN, r->connection->log, 0, "uscf->peer.init != ngx_pq_peer_init");
+//    uscf->peer.init = ngx_pq_peer_init;
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     if (plcf->complex.value.data) {
         ngx_str_t host;
@@ -1430,10 +1430,10 @@ static char *ngx_pq_option_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *co
 static char *ngx_pq_option_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_pq_srv_conf_t *pscf = conf;
     ngx_http_upstream_srv_conf_t *uscf = ngx_http_conf_get_module_srv_conf(cf, ngx_http_upstream_module);
-    if (uscf->peer.init_upstream != ngx_pq_peer_init_upstream) {
+//    if (uscf->peer.init_upstream != ngx_pq_peer_init_upstream) {
         pscf->peer.init_upstream = uscf->peer.init_upstream ? uscf->peer.init_upstream : ngx_http_upstream_init_round_robin;
         uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
-    }
+//    }
     return ngx_pq_option_loc_ups_conf(cf, &pscf->connect);
 }
 static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -1453,7 +1453,7 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
     url.url = str[1];
     if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
     ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
-    uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
+    if (!uscf->peer.init_upstream) uscf->peer.init_upstream = ngx_pq_peer_init_upstream;
     return NGX_CONF_OK;
 }
 static char *ngx_pq_prepare_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
