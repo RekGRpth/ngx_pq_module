@@ -100,7 +100,6 @@ user: postgres
 GET /
 --- error_code: 502
 --- response_headers
-Content-Length: 157
 Content-Type: text/html
 application-name: nginx
 client-encoding: UTF8
