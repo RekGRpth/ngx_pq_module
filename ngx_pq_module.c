@@ -819,6 +819,14 @@ static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv
     return NGX_OK;
 }
 
+static void ngx_http_upstream_next_my(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_uint_t ft_type) {
+    ngx_http_upstream_handler_pt read_event_handler = u->read_event_handler;
+    ngx_http_upstream_handler_pt write_event_handler = u->write_event_handler;
+    ngx_http_upstream_next(r, u, ft_type);
+    u->read_event_handler = read_event_handler;
+    u->write_event_handler = write_event_handler;
+}
+
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     ngx_pq_save_t *s = d->save;
@@ -843,13 +851,13 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
-    if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
+    if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
     rc = ngx_pq_poll(s, d);
 ret:
     switch (rc) {
         case NGX_AGAIN: break;
-        case NGX_BUSY: ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_NOLIVE); break;
-        case NGX_DECLINED: ngx_http_upstream_next(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
+        case NGX_BUSY: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_NOLIVE); break;
+        case NGX_DECLINED: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
         default: ngx_http_upstream_finalize_request(r, u, rc); break;
     }
 }
