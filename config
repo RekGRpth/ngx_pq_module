@@ -1,5 +1,5 @@
 ngx_addon_name=ngx_pq_module
-ngx_feature_path="`pg_config --includedir` `pg_config --includedir-server`"
+ngx_feature_path="`pg_config --includedir` `pg_config --includedir-server` `pg_config --pkgincludedir`"
 
 NGX_PQ_SRCS=$ngx_addon_dir/ngx_pq_module.c
 
