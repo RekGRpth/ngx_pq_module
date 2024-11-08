@@ -12,7 +12,7 @@ extern ngx_int_t ngx_http_push_stream_add_msg_to_channel_my(ngx_log_t *log, ngx_
 extern ngx_int_t ngx_http_push_stream_delete_channel_my(ngx_log_t *log, ngx_str_t *id, u_char *text, size_t len, ngx_pool_t *temp_pool) __attribute__((weak));
 
 typedef struct {
-    const char *message;
+    char *message;
     ngx_log_handler_pt handler;
     void *data;
 } ngx_pq_log_t;
@@ -21,7 +21,7 @@ typedef struct {
     ngx_pq_log_t original = { \
         .data = log->data, \
         .handler = log->handler, \
-        .message = (msg), \
+        .message = (char *)(msg), \
     }; \
     (log)->data = &original; \
     (log)->handler = ngx_pq_log_error_handler; \
@@ -994,7 +994,7 @@ static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_
     if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
-    if (!(v->data = (char *)PQparameterStatus(s->conn, (char *)data))) return NGX_OK;
+    if (!(v->data = (u_char *)PQparameterStatus(s->conn, (char *)data))) return NGX_OK;
     if (!(v->len = ngx_strlen(v->data))) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
@@ -1026,7 +1026,7 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
     if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
     if (!s) return NGX_OK;
-    if (!(v->data = (char *)PQsslAttribute(s->conn, (char *)data))) return NGX_OK;
+    if (!(v->data = (u_char *)PQsslAttribute(s->conn, (char *)data))) return NGX_OK;
     if (!(v->len = ngx_strlen(v->data))) return NGX_OK;
     v->valid = 1;
     v->no_cacheable = 0;
