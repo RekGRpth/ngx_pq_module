@@ -849,6 +849,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
             goto ret;
         case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
+        case CONNECTION_ALLOCATED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_ALLOCATED"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
