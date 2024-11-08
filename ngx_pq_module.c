@@ -858,6 +858,7 @@ ret:
         case NGX_AGAIN: break;
         case NGX_BUSY: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_NOLIVE); break;
         case NGX_DECLINED: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
+        case NGX_ERROR: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
         default: ngx_http_upstream_finalize_request(r, u, rc); break;
     }
 }
