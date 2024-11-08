@@ -1055,7 +1055,7 @@ static ngx_int_t ngx_pq_transaction_status_get_handler(ngx_http_request_t *r, ng
     return NGX_OK;
 }
 
-static const ngx_http_variable_t ngx_pq_variables[] = {
+static ngx_http_variable_t ngx_pq_variables[] = {
   { ngx_string("pq_application_name"), NULL, ngx_pq_parameter_status_get_handler, (uintptr_t)"application_name", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_cipher"), NULL, ngx_pq_ssl_attribute_get_handler, (uintptr_t)"key_cipher", NGX_HTTP_VAR_CHANGEABLE, 0 },
   { ngx_string("pq_client_encoding"), NULL, ngx_pq_parameter_status_get_handler, (uintptr_t)"client_encoding", NGX_HTTP_VAR_CHANGEABLE, 0 },
