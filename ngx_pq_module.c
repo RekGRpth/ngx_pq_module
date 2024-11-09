@@ -833,11 +833,18 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     ngx_connection_t *c = s->connection;
     ngx_int_t rc = NGX_AGAIN;
     switch (PQstatus(s->conn)) {
+#if PG_VERSION_NUM >= 170000
+        case CONNECTION_ALLOCATED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_ALLOCATED"); break;
+#endif
         case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
         case CONNECTION_AWAITING_RESPONSE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AWAITING_RESPONSE"); break;
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
+#if PG_VERSION_NUM >= 140000
         case CONNECTION_CHECK_STANDBY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_STANDBY"); break;
+#endif
+#if PG_VERSION_NUM >= 130000
         case CONNECTION_CHECK_TARGET: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_TARGET"); break;
+#endif
         case CONNECTION_CHECK_WRITABLE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_WRITABLE"); break;
         case CONNECTION_CONSUME: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CONSUME"); break;
         case CONNECTION_GSS_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_GSS_STARTUP"); break;
@@ -859,6 +866,7 @@ ret:
         case NGX_AGAIN: break;
         case NGX_BUSY: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_NOLIVE); break;
         case NGX_DECLINED: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
+        case NGX_ERROR: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_ERROR); break;
         default: ngx_http_upstream_finalize_request(r, u, rc); break;
     }
 }
