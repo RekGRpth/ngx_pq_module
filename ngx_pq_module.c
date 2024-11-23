@@ -545,7 +545,13 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_connection_t *c = s->connection;
     for (;;) switch (PQconnectPoll(s->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
+        case PGRES_POLLING_FAILED: {
+            const char *message = PQerrorMessage(s->conn);
+            ngx_uint_t level = NGX_LOG_ERR;
+            if (!ngx_strncasecmp((u_char *)message, (u_char *)"session is read-only\n", sizeof("session is read-only\n") - 1)) { level = NGX_LOG_WARN; message = NULL; }
+            ngx_pq_log_error(level, s->connection->log, 0, message, "PGRES_POLLING_FAILED");
+            return NGX_DECLINED;
+        }
         case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
