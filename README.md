@@ -24,6 +24,18 @@ upstream postgres {
     server postgres:5432; # host is postgres and port is 5432
 }
 ```
+pq_level
+-------------
+* Syntax: **pq_level** *level* "*message*"
+* Default: --
+* Context: upstream
+
+Sets logging level for connection error:
+```nginx
+upstream postgres {
+    pq_level info "session is read-only\n";
+}
+```
 pq_log
 -------------
 * Syntax: **pq_log** *file* [ *level* ]
