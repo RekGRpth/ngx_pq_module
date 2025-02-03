@@ -95,6 +95,12 @@ typedef struct {
 } ngx_pq_query_t;
 
 typedef struct {
+    ngx_str_t message;
+    ngx_uint_t level;
+} ngx_pq_level_t;
+
+typedef struct {
+    ngx_array_t levels;
     ngx_array_t queries;
     ngx_http_upstream_peer_t peer;
     ngx_log_t *log;
@@ -545,7 +551,21 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_connection_t *c = s->connection;
     for (;;) switch (PQconnectPoll(s->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PGRES_POLLING_FAILED"); return NGX_ERROR;
+        case PGRES_POLLING_FAILED: {
+            const char *message = PQerrorMessage(s->conn);
+            ngx_uint_t log_level = NGX_LOG_ERR;
+            ngx_http_request_t *r = d->request;
+            ngx_http_upstream_t *u = r->upstream;
+            ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+            if (uscf->srv_conf) {
+                ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+                ngx_array_t *levels = &pscf->levels;
+                ngx_pq_level_t *level = levels->elts;
+                for (ngx_uint_t i = 0; i < levels->nelts; i++) if (!ngx_strcmp((u_char *)message, level[i].message.data)) { log_level = level[i].level; break; }
+            }
+            ngx_pq_log_error(log_level, s->connection->log, 0, message, "PGRES_POLLING_FAILED");
+            return NGX_DECLINED;
+        }
         case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_OK"); return ngx_pq_queries(s, d, ngx_pq_type_location|ngx_pq_type_upstream);
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
@@ -1424,6 +1444,30 @@ static char *ngx_pq_log_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_log_set_log(cf, &pscf->log);
 }
+static char *ngx_pq_level_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_pq_srv_conf_t *pscf = conf;
+    ngx_pq_level_t *level;
+    if (!pscf->levels.elts && ngx_array_init(&pscf->levels, cf->pool, 1, sizeof(*level)) != NGX_OK) return "ngx_array_init != NGX_OK";
+    if (!(level = ngx_array_push(&pscf->levels))) return "!ngx_array_push";
+    ngx_memzero(level, sizeof(*level));
+    ngx_str_t *args = cf->args->elts;
+    static const ngx_conf_enum_t e[] = {
+        { ngx_string("alert"), NGX_LOG_ALERT },
+        { ngx_string("crit"), NGX_LOG_CRIT },
+        { ngx_string("debug"), NGX_LOG_DEBUG },
+        { ngx_string("emerg"), NGX_LOG_EMERG },
+        { ngx_string("error"), NGX_LOG_ERR },
+        { ngx_string("info"), NGX_LOG_INFO },
+        { ngx_string("notice"), NGX_LOG_NOTICE },
+        { ngx_string("warn"), NGX_LOG_WARN },
+        { ngx_null_string, 0 }
+    };
+    ngx_uint_t j;
+    for (j = 0; e[j].name.len; j++) if (e[j].name.len == args[1].len && !ngx_strncmp(e[j].name.data, args[1].data, args[1].len)) { level->level = e[j].value; break; }
+    if (!e[j].name.len) { ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "\"%V\" directive error: value \"%V\" must be \"alert\", \"crit\", \"debug\", \"emerg\", \"error\", \"info\", \"notice\" or \"warn\"", &cmd->name, &args[1]); return NGX_CONF_ERROR; }
+    level->message = args[2];
+    return NGX_CONF_OK;
+}
 static ngx_conf_bitmask_t ngx_pq_next_upstream_masks[] = {
   { ngx_string("error"), NGX_HTTP_UPSTREAM_FT_ERROR },
   { ngx_string("http_403"), NGX_HTTP_UPSTREAM_FT_HTTP_403 },
@@ -1502,6 +1546,7 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_execute"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_execute_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_execute|ngx_pq_type_output, NULL },
   { ngx_string("pq_execute"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_execute_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_execute, NULL },
   { ngx_string("pq_ignore_client_abort"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.ignore_client_abort), NULL },
+  { ngx_string("pq_level"), NGX_HTTP_UPS_CONF|NGX_CONF_TAKE2, ngx_pq_level_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, 0, NULL },
   { ngx_string("pq_log"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_log_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, 0, NULL },
   { ngx_string("pq_next_upstream"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE, ngx_conf_set_bitmask_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.next_upstream), &ngx_pq_next_upstream_masks },
   { ngx_string("pq_next_upstream_timeout"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_msec_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.next_upstream_timeout), NULL },
