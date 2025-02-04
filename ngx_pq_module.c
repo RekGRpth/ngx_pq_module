@@ -85,7 +85,6 @@ typedef struct {
     ngx_str_t null;
     ngx_uint_t output;
     ngx_uint_t type;
-    ngx_uint_t notfound;
     u_char delimiter;
     u_char escape;
     u_char quote;
@@ -396,7 +395,6 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
             }
         }
     }
-    if (PQntuples(res) == 0) d->request->headers_out.status = query->notfound;
     return NGX_OK;
 }
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
@@ -878,6 +876,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
             goto ret;
         case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
+        case CONNECTION_ALLOCATED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_ALLOCATED"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
@@ -1237,15 +1236,6 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("string=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("string=") - 1], str[i].len - (sizeof("string=") - 1))) break;
             if (!e[j].name.len) return "\"string\" value must be \"off\", \"no\", \"false\", \"on\", \"yes\" or \"true\"";
             query->string = e[j].value;
-            continue;
-        }
-        if (str[i].len > sizeof("notfound=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"notfound=", sizeof("notfound=") - 1)) {
-            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
-            ngx_uint_t j;
-            static const ngx_conf_enum_t e[] = { { ngx_string("200"), NGX_HTTP_OK }, { ngx_string("204"), NGX_HTTP_NO_CONTENT }, { ngx_string("400"), NGX_HTTP_BAD_REQUEST }, { ngx_string("401"), NGX_HTTP_UNAUTHORIZED }, { ngx_string("403"), NGX_HTTP_FORBIDDEN }, { ngx_string("404"), NGX_HTTP_NOT_FOUND }, { ngx_null_string, 0 } };
-            for (j = 0; e[j].name.len; j++) if (e[j].name.len == str[i].len - (sizeof("notfound=") - 1) && !ngx_strncasecmp(e[j].name.data, &str[i].data[sizeof("notfound=") - 1], str[i].len - (sizeof("notfound=") - 1))) break;
-            if (!e[j].name.len) return "\"notfound\" value must be \"200\", \"204\", \"400\", \"401\", \"403\" or \"404\"";
-            query->notfound = e[j].value;
             continue;
         }
         ngx_pq_argument_t *argument;
