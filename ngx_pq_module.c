@@ -74,6 +74,7 @@ typedef struct {
     ngx_http_complex_value_t complex;
     ngx_http_upstream_conf_t upstream;
     ngx_pq_connect_t connect;
+    ngx_uint_t notfound_status;
 } ngx_pq_loc_conf_t;
 
 typedef struct {
@@ -395,6 +396,9 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
             }
         }
     }
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(d->request, ngx_pq_module);
+    if (PQntuples(res) == 0 && d->request->headers_out.status != NGX_HTTP_OK) d->request->headers_out.status = plcf->notfound_status;
+    else d->request->headers_out.status = NGX_HTTP_OK;
     return NGX_OK;
 }
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
@@ -876,7 +880,6 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
             goto ret;
         case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
         case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
-        case CONNECTION_ALLOCATED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_ALLOCATED"); break;
         case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
     }
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
@@ -1414,6 +1417,7 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
     conf->upstream.pass_request_body = NGX_CONF_UNSET;
     conf->upstream.request_buffering = NGX_CONF_UNSET;
+    conf->notfound_status = NGX_CONF_UNSET_UINT;
     ngx_str_set(&conf->upstream.module, "pq");
     return conf;
 }
@@ -1428,6 +1432,7 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
     ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
     ngx_conf_merge_value(conf->upstream.request_buffering, prev->upstream.request_buffering, 1);
+    ngx_conf_merge_uint_value(conf->notfound_status, prev->notfound_status, 0);
     if (conf->upstream.next_upstream & NGX_HTTP_UPSTREAM_FT_OFF) conf->upstream.next_upstream = NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_OFF;
     return NGX_CONF_OK;
 }
@@ -1529,6 +1534,20 @@ static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *con
     ngx_pq_srv_conf_t *pscf = conf;
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
 }
+static char *ngx_pq_notfound_status_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    ngx_conf_set_num_slot(cf, cmd, conf);
+    ngx_pq_loc_conf_t *p = conf;
+
+    if (p->notfound_status != NGX_HTTP_OK
+     && p->notfound_status != NGX_HTTP_NO_CONTENT
+     && p->notfound_status != NGX_HTTP_BAD_REQUEST
+     && p->notfound_status != NGX_HTTP_UNAUTHORIZED
+     && p->notfound_status != NGX_HTTP_FORBIDDEN
+     && p->notfound_status != NGX_HTTP_NOT_FOUND
+    ) return "value must be \"200\", \"204\", \"400\", \"401\", \"403\" or \"404\"";
+
+    return NGX_CONF_OK;
+}
 
 static ngx_http_module_t ngx_pq_ctx = {
     .preconfiguration = ngx_pq_preconfiguration,
@@ -1560,6 +1579,7 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_query"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_query_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_query|ngx_pq_type_output, NULL },
   { ngx_string("pq_query"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_query_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_query, NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
+  { ngx_string("pq_notfound_status"), NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_pq_notfound_status_conf, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, notfound_status), NULL },
     ngx_null_command
 };
 
