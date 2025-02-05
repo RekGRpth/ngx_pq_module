@@ -136,7 +136,7 @@ location =/postgres {
 ```
 pq_no_data_found
 -------------
-* Syntax: **pq_no_data_found** [ *200* | *204* | *400* | *401* | *403* | *404* ]
+* Syntax: **pq_no_data_found** { *200* | *204* | *400* | *401* | *403* | *404* }
 * Default: 200
 * Context: main, server, location, if in location
 
