@@ -134,6 +134,35 @@ location =/postgres {
     pq_pass $postgres; # upstream is taken from $postgres variable
 }
 ```
+pq_no_data_found
+-------------
+* Syntax: **pq_no_data_found** [ *200* | *204* | *400* | *401* | *403* | *404* ]
+* Default: 200
+* Context: main, server, location, if in location
+
+Sets HTTP status code for empty response. Status code will be set to given value only if all queries inside location returns nothing.
+```nginx
+server {
+  server_name  pqtst;
+
+  pq_no_data_found      404;
+
+  location /auth {
+    pq_no_data_found  403;
+    pq_pass           postgres;
+    pq_query "SELECT id FROM users WHERE jwt_valid($1)" $http_x_jwt output=value;
+  }
+
+  location /userdata {
+    auth_request      /auth;
+    pq_no_data_found  204;
+    pq_pass           postgres;
+    pq_query "SELECT concat_ws(' ', lastname, firstname) FROM users WHERE id = jwt_uid($1)" $http_x_jwt output=value;
+    pq_query "SELECT email, phone, address FROM users WHERE id = jwt_uid($1)" $http_x_jwt output=plain;
+    pq_query "SELECT json_agg(json_build_object('name', firstname, 'email', email, 'phone', phone)) FROM users WHERE friend = jwt_uid($1)" $http_x_jwt output=value;
+  }
+}
+```
 pq_query
 -------------
 * Syntax: **pq_query** *sql* [ *$argument_value* | *$argument_value*::*$argument_oid* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
