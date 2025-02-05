@@ -163,6 +163,7 @@ typedef struct {
     ngx_pq_save_t *save;
     ngx_queue_t queue;
     ngx_uint_t type;
+    ngx_uint_t row_count;
 } ngx_pq_data_t;
 
 typedef struct {
@@ -396,9 +397,7 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
             }
         }
     }
-    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(d->request, ngx_pq_module);
-    if (PQntuples(res) == 0 && d->request->headers_out.status != NGX_HTTP_OK) d->request->headers_out.status = plcf->notfound_status;
-    else d->request->headers_out.status = NGX_HTTP_OK;
+    d->row_count += PQntuples(res);
     return NGX_OK;
 }
 static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
@@ -918,11 +917,12 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_http_upstream_t *u = r->upstream;
     u->keepalive = !u->headers_in.connection_close;
     u->request_body_sent = 1;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
-    if (!r->headers_out.status) r->headers_out.status = NGX_HTTP_OK;
+    if (!r->headers_out.status) r->headers_out.status = (d->row_count)? NGX_HTTP_OK: plcf->notfound_status;
     r->headers_out.content_length_n = 0;
     for (ngx_chain_t *cl = u->out_bufs; cl; cl = cl->next) r->headers_out.content_length_n += cl->buf->last - cl->buf->pos;
     rc = ngx_http_send_header(r);
