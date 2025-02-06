@@ -355,7 +355,7 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
     else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); }
     if (s->count) { s->count--; return NGX_OK; }
     if (!d) return NGX_OK;
-    d->empty = PQntuples(res) == 0;
+    d->empty |= PQntuples(res) == 0;
     if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
