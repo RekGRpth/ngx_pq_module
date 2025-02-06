@@ -156,6 +156,7 @@ typedef struct {
 
 typedef struct {
     ngx_array_t variables;
+    ngx_flag_t empty;
     ngx_http_request_t *request;
     ngx_int_t row;
     ngx_peer_connection_t peer;
@@ -163,7 +164,6 @@ typedef struct {
     ngx_pq_save_t *save;
     ngx_queue_t queue;
     ngx_uint_t type;
-    ngx_uint_t row_count;
 } ngx_pq_data_t;
 
 typedef struct {
@@ -355,7 +355,7 @@ static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresu
     else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); }
     if (s->count) { s->count--; return NGX_OK; }
     if (!d) return NGX_OK;
-    d->row_count += PQntuples(res);
+    d->empty = PQntuples(res) == 0;
     if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     ngx_queue_remove(q);
@@ -922,11 +922,11 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
     if (!r->headers_out.status) {
-        if (d->row_count) {
-            r->headers_out.status = NGX_HTTP_OK;
-        } else {
+        if (d->empty) {
             ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
             r->headers_out.status = plcf->empty;
+        } else {
+            r->headers_out.status = NGX_HTTP_OK;
         }
     }
     r->headers_out.content_length_n = 0;
