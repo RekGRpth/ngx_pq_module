@@ -1541,7 +1541,7 @@ static char *ngx_pq_query_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *con
     return ngx_pq_prepare_query_loc_ups_conf(cf, cmd, &pscf->queries);
 }
 
-static ngx_conf_enum_t ngx_pq_no_data_found[] = {
+static ngx_conf_enum_t ngx_pq_empty[] = {
     { ngx_string("200"), NGX_HTTP_OK },
     { ngx_string("204"), NGX_HTTP_NO_CONTENT },
     { ngx_string("400"), NGX_HTTP_BAD_REQUEST },
@@ -1581,7 +1581,7 @@ static ngx_command_t ngx_pq_commands[] = {
   { ngx_string("pq_query"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_query_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_query|ngx_pq_type_output, NULL },
   { ngx_string("pq_query"), NGX_HTTP_UPS_CONF|NGX_CONF_1MORE, ngx_pq_query_ups_conf, NGX_HTTP_SRV_CONF_OFFSET, ngx_pq_type_upstream|ngx_pq_type_query, NULL },
   { ngx_string("pq_request_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.request_buffering), NULL },
-  { ngx_string("pq_no_data_found"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE1, ngx_conf_set_enum_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, no_data_found_status), &ngx_pq_no_data_found },
+  { ngx_string("pq_empty"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_TAKE1, ngx_conf_set_enum_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, no_data_found_status), &ngx_pq_empty },
     ngx_null_command
 };
 

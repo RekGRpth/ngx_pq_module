@@ -134,9 +134,9 @@ location =/postgres {
     pq_pass $postgres; # upstream is taken from $postgres variable
 }
 ```
-pq_no_data_found
+pq_empty
 -------------
-* Syntax: **pq_no_data_found** { *200* | *204* | *400* | *401* | *403* | *404* }
+* Syntax: **pq_empty** { *200* | *204* | *400* | *401* | *403* | *404* }
 * Default: 200
 * Context: main, server, location, if in location
 
@@ -145,17 +145,17 @@ Sets HTTP status code for empty response. Status code will be set to given value
 server {
   server_name  pqtst;
 
-  pq_no_data_found      404;
+  pq_empty      404;
 
   location /auth {
-    pq_no_data_found  403;
+    pq_empty  403;
     pq_pass           postgres;
     pq_query "SELECT id FROM users WHERE jwt_valid($1)" $http_x_jwt output=value;
   }
 
   location /userdata {
     auth_request      /auth;
-    pq_no_data_found  204;
+    pq_empty  204;
     pq_pass           postgres;
     pq_query "SELECT concat_ws(' ', lastname, firstname) FROM users WHERE id = jwt_uid($1)" $http_x_jwt output=value;
     pq_query "SELECT email, phone, address FROM users WHERE id = jwt_uid($1)" $http_x_jwt output=plain;
