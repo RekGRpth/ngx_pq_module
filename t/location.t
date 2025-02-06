@@ -789,3 +789,19 @@ user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
 --- timeout: 60
+
+=== TEST 17:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_empty 404;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 where false";
+    }
+--- request
+GET /
+--- error_code: 404
+--- timeout: 60
