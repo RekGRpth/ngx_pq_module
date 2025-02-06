@@ -2,6 +2,19 @@
 
 # Directives
 
+pq_empty
+-------------
+* Syntax: **pq_empty** *200* | *204* | *400* | *401* | *403* | *404*
+* Default: 200
+* Context: main, server, location, if in location
+
+Sets HTTP status code for empty response. Status code will be set to given value only if all queries inside location returns nothing.
+```nginx
+location =/postgres {
+    pq_empty 404; # returns 404 (not found), when 0 rows
+    pq_query "SELECT 1 WHERE false"; # returns 0 rows
+}
+```
 pq_execute
 -------------
 * Syntax: **pq_execute** *$query_name* [ *$argument_value* ] [ output=*csv* | output=*plain* | output=*value* | output=*$variable* ]
@@ -132,19 +145,6 @@ location =/postgres {
 # or
 location =/postgres {
     pq_pass $postgres; # upstream is taken from $postgres variable
-}
-```
-pq_empty
--------------
-* Syntax: **pq_empty** *200* | *204* | *400* | *401* | *403* | *404*
-* Default: 200
-* Context: main, server, location, if in location
-
-Sets HTTP status code for empty response. Status code will be set to given value only if all queries inside location returns nothing.
-```nginx
-location =/postgres {
-    pq_empty 404; # returns 404 (not found), when 0 rows
-    pq_query "SELECT 1 WHERE false"; # returns 0 rows
 }
 ```
 pq_query
