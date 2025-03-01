@@ -82,6 +82,9 @@ typedef struct {
     ngx_array_t commands;
     ngx_flag_t header;
     ngx_flag_t string;
+#ifdef LIBPQ_HAS_CHUNK_MODE
+    ngx_int_t chunkSize;
+#endif
     ngx_int_t index;
     ngx_str_t null;
     ngx_uint_t output;
@@ -157,6 +160,7 @@ typedef struct {
 typedef struct {
     ngx_array_t variables;
     ngx_flag_t empty;
+    ngx_flag_t not_first;
     ngx_http_request_t *request;
     ngx_int_t row;
     ngx_peer_connection_t peer;
@@ -349,20 +353,32 @@ static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGre
     if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FUNCTION, offsetof(ngx_pq_error_t, source_function)) != NGX_OK) return NGX_ERROR;
     return NGX_HTTP_BAD_GATEWAY;
 }
-static ngx_int_t ngx_pq_res_tuples_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
+static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
-    if ((value = PQcmdStatus(res)) && ngx_strlen(value)) { ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK and %s", value); }
-    else { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); }
-    if (s->count) { s->count--; return NGX_OK; }
+    if ((value = PQcmdStatus(res)) && ngx_strlen(value)) switch (PQresultStatus(res)) {
+#ifdef LIBPQ_HAS_CHUNK_MODE
+        case PGRES_TUPLES_CHUNK: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_CHUNK and %s", value); break;
+#endif
+        case PGRES_TUPLES_OK: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK and %s", value); break;
+        default: break;
+    } else switch (PQresultStatus(res)) {
+#ifdef LIBPQ_HAS_CHUNK_MODE
+        case PGRES_TUPLES_CHUNK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_CHUNK"); break;
+#endif
+        case PGRES_TUPLES_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_TUPLES_OK"); break;
+        default: break;
+    }
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && s->count) { s->count--; return NGX_OK; }
     if (!d) return NGX_OK;
     d->empty |= PQntuples(res) == 0;
     if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&d->queue);
-    ngx_queue_remove(q);
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) { ngx_queue_remove(q); }
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
-    if (query->header) {
+    if (query->header && !d->not_first) {
+        d->not_first = 1;
         if (d->type & ngx_pq_type_location && d->row > 0) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
@@ -520,6 +536,13 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         if (query[i].type & ngx_pq_type_query) {
             if (!PQsendQueryParams(s->conn, sql.data, query[i].arguments.nelts, qq->paramTypes, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsendQueryParams"); rc = NGX_DECLINED; goto ret; }
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryParams('%s')", sql.data);
+#ifdef LIBPQ_HAS_CHUNK_MODE
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "query[%i].chunkSize = %i", i, query[i].chunkSize);
+            if (query[i].chunkSize > 0) {
+                if (!PQsetChunkedRowsMode(s->conn, query[i].chunkSize)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode"); rc = NGX_DECLINED; goto ret; }
+                ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsetChunkedRowsMode(%i)", query[i].chunkSize);
+            }
+#endif
         } else {
             resetPQExpBuffer(&name);
             if (query[i].name.complex.value.data) {
@@ -534,6 +557,12 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
             } else if (query[i].type & ngx_pq_type_execute) {
                 if (!PQsendQueryPrepared(s->conn, name.data, query[i].arguments.nelts, qq->paramValues, NULL, NULL, 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsendQueryPrepared"); rc = NGX_DECLINED; goto ret; }
                 ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryPrepared('%s')", name.data);
+#ifdef LIBPQ_HAS_CHUNK_MODE
+                if (query[i].chunkSize > 0) {
+                    if (!PQsetChunkedRowsMode(s->conn, query[i].chunkSize)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode"); rc = NGX_DECLINED; goto ret; }
+                    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsetChunkedRowsMode(%i)", query[i].chunkSize);
+                }
+#endif
             }
         }
     }
@@ -586,7 +615,12 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 #ifdef LIBPQ_HAS_PIPELINING
         case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC"); break;
 #endif
-        case PGRES_TUPLES_OK: rc = ngx_pq_res_tuples_ok(s, d, res); break;
+        case PGRES_TUPLES_OK:
+#ifdef LIBPQ_HAS_CHUNK_MODE
+        case PGRES_TUPLES_CHUNK:
+#endif
+            rc = ngx_pq_res_tuples(s, d, res);
+            break;
         default: rc = ngx_pq_res_default(s, d, res); break;
     }
 #ifdef LIBPQ_HAS_PIPELINING
@@ -1247,6 +1281,16 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             query->string = e[j].value;
             continue;
         }
+#ifdef LIBPQ_HAS_CHUNK_MODE
+        if (str[i].len > sizeof("chunkSize=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"chunkSize=", sizeof("chunkSize=") - 1)) {
+            if (!(query->type & ngx_pq_type_output)) return "output not allowed";
+            ngx_int_t n = ngx_atoi(str[i].data + sizeof("chunkSize=") - 1, str[i].len - (sizeof("chunkSize=") - 1));
+            if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
+            if (n <= 0) return "chunkSize must be positive";
+            query->chunkSize = n;
+            continue;
+        }
+#endif
         ngx_pq_argument_t *argument;
         if (!query->arguments.elts && ngx_array_init(&query->arguments, cf->pool, 1, sizeof(*argument)) != NGX_OK) return "ngx_array_init != NGX_OK";
         if (!(argument = ngx_array_push(&query->arguments))) return "!ngx_array_push";
