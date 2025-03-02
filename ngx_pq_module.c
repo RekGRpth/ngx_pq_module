@@ -538,7 +538,6 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
             if (!PQsendQueryParams(s->conn, sql.data, query[i].arguments.nelts, qq->paramTypes, qq->paramValues, NULL, NULL, (query->output == ngx_pq_output_binary)? 1: 0)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsendQueryParams"); rc = NGX_DECLINED; goto ret; }
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsendQueryParams('%s')", sql.data);
 #ifdef LIBPQ_HAS_CHUNK_MODE
-            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "query[%i].chunkSize = %i", i, query[i].chunkSize);
             if (query[i].chunkSize > 0) {
                 if (!PQsetChunkedRowsMode(s->conn, query[i].chunkSize)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode"); rc = NGX_DECLINED; goto ret; }
                 ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsetChunkedRowsMode(%i)", query[i].chunkSize);
