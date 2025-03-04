@@ -152,6 +152,7 @@ typedef struct {
     ngx_connection_t *connection;
     ngx_event_handler_pt read;
     ngx_event_handler_pt write;
+    ngx_flag_t keepalive;
     ngx_msec_t timeout;
     ngx_queue_t queue;
     ngx_uint_t count;
@@ -628,10 +629,16 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 #endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
-    if (!d) return rc;
-    if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
-    if (rc == NGX_OK && d->type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
-    if (s->conn->inBufSize > s->inBufSize) {
+    if (d) {
+        if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
+        if (rc == NGX_OK && d->type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
+    } else if (!s->keepalive) {
+        ngx_connection_t *c = s->connection;
+        ngx_destroy_pool(c->pool);
+        ngx_close_connection(c);
+        return rc;
+    }
+    if (s->keepalive && s->conn->inBufSize > s->inBufSize) {
         ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
         char *newbuf;
         if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
@@ -808,6 +815,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
     if (!s) return;
+    s->keepalive = (pc->connection == NULL);
     if (!ngx_queue_empty(&d->queue)) {
         while (!ngx_queue_empty(&d->queue)) {
             ngx_queue_t *q = ngx_queue_head(&d->queue);
@@ -822,11 +830,14 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
         }
     }
     if (pc->connection) return;
+    ngx_log_t *log = pc->log;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
-    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
-    if (!pscf) return;
+    if (uscf->srv_conf) {
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        if (pscf && pscf->log) log = pscf->log;
+    }
     ngx_connection_t *c = s->connection;
     if (!c) return;
     if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
@@ -834,11 +845,10 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
     s->write = c->write->handler;
     c->read->handler = ngx_pq_read_handler;
     c->write->handler = ngx_pq_write_handler;
-    if (!pscf->log) return;
-    c->log = pscf->log;
-    c->pool->log = c->log;
-    c->read->log = c->log;
-    c->write->log = c->log;
+    c->log = log;
+    c->pool->log = log;
+    c->read->log = log;
+    c->write->log = log;
 }
 
 static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
@@ -890,30 +900,12 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     ngx_connection_t *c = s->connection;
     ngx_int_t rc = NGX_AGAIN;
     switch (PQstatus(s->conn)) {
-#if PG_VERSION_NUM >= 170000
-        case CONNECTION_ALLOCATED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_ALLOCATED"); break;
-#endif
-        case CONNECTION_AUTH_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AUTH_OK"); break;
-        case CONNECTION_AWAITING_RESPONSE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_AWAITING_RESPONSE"); break;
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
-#if PG_VERSION_NUM >= 140000
-        case CONNECTION_CHECK_STANDBY: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_STANDBY"); break;
-#endif
-#if PG_VERSION_NUM >= 130000
-        case CONNECTION_CHECK_TARGET: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_TARGET"); break;
-#endif
-        case CONNECTION_CHECK_WRITABLE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CHECK_WRITABLE"); break;
-        case CONNECTION_CONSUME: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_CONSUME"); break;
-        case CONNECTION_GSS_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_GSS_STARTUP"); break;
-        case CONNECTION_MADE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_MADE"); break;
-        case CONNECTION_NEEDED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_NEEDED"); break;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK");
             if (c->read->timedout || c->write->timedout) return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
             rc = ngx_pq_result(s, d);
             goto ret;
-        case CONNECTION_SETENV: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SETENV"); break;
-        case CONNECTION_SSL_STARTUP: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_SSL_STARTUP"); break;
-        case CONNECTION_STARTED: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_STARTED"); break;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "PQstatus = %i", PQstatus(s->conn)); break;
     }
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
     rc = ngx_pq_poll(s, d);
