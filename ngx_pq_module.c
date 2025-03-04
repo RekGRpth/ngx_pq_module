@@ -115,6 +115,7 @@ typedef struct {
 
 typedef struct {
     const char **paramValues;
+    ngx_flag_t not_first;
     ngx_pq_query_t *query;
     ngx_queue_t queue;
     Oid *paramTypes;
@@ -169,7 +170,6 @@ typedef struct {
 typedef struct {
     ngx_array_t variables;
     ngx_flag_t empty;
-    ngx_flag_t not_first;
     ngx_http_request_t *request;
     ngx_int_t row;
     ngx_peer_connection_t peer;
@@ -386,8 +386,8 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
-    if (query->header && !d->not_first) {
-        d->not_first = 1;
+    if (query->header && !qq->not_first) {
+        qq->not_first = 1;
         if (d->type & ngx_pq_type_location && d->row > 0) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
