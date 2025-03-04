@@ -159,6 +159,13 @@ typedef struct {
     PGconn *conn;
 } ngx_pq_save_t;
 
+#ifdef LIBPQ_HAS_ASYNC_CANCEL
+typedef struct {
+    ngx_connection_t *connection;
+    PGcancelConn *cancel;
+} ngx_pq_cancel_t;
+#endif
+
 typedef struct {
     ngx_array_t variables;
     ngx_flag_t empty;
@@ -605,6 +612,19 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     }
     return NGX_AGAIN;
 }
+#ifdef LIBPQ_HAS_ASYNC_CANCEL
+static ngx_int_t ngx_pq_cancel_poll(ngx_pq_cancel_t *q) {
+    ngx_connection_t *c = q->connection;
+    for (;;) switch (PQcancelPoll(q->cancel)) {
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_OK"); return NGX_OK;
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
+    }
+    return NGX_AGAIN;
+}
+#endif
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
     if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
@@ -668,6 +688,21 @@ static void ngx_pq_save_cln_handler(void *data) {
         (void)ngx_http_push_stream_delete_channel_my(c->log, &cq->channel, NULL, 0, c->pool);
     }
 }
+#ifdef LIBPQ_HAS_ASYNC_CANCEL
+static void ngx_pq_cancel_cln_handler(void *data) {
+    ngx_pq_cancel_t *q = data;
+    ngx_connection_t *c = q->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
+    if (ngx_del_conn) {
+        ngx_del_conn(c, NGX_CLOSE_EVENT);
+    } else {
+        ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
+        ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
+    }
+    if (q->cancel) PQcancelFinish(q->cancel);
+    q->cancel = NULL;
+}
+#endif
 static void ngx_pq_notice_processor(void *arg, const char *message) {
     ngx_pq_save_t *s = arg;
     ngx_pq_log_error(NGX_LOG_NOTICE, s->connection->log, 0, message, "PGRES_NONFATAL_ERROR");
@@ -790,6 +825,40 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
     }
 }
 
+#ifdef LIBPQ_HAS_ASYNC_CANCEL
+static void ngx_pq_cancel_handler(ngx_pq_cancel_t *q) {
+    ngx_int_t rc = NGX_AGAIN;
+    switch (PQcancelStatus(q->cancel)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(q->cancel)); break;
+    }
+    rc = ngx_pq_cancel_poll(q);
+ret:
+    if (rc == NGX_OK) {
+        ngx_connection_t *c = q->connection;
+        ngx_destroy_pool(c->pool);
+        ngx_close_connection(c);
+    }
+}
+static void ngx_pq_cancel_read_handler(ngx_event_t *ev) {
+    ngx_connection_t *c = ev->data;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
+        ngx_pq_cancel_t *q = cln->data;
+        return ngx_pq_cancel_handler(q);
+    }
+}
+static void ngx_pq_cancel_write_handler(ngx_event_t *ev) {
+    ngx_connection_t *c = ev->data;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
+        ngx_pq_cancel_t *q = cln->data;
+        return ngx_pq_cancel_handler(q);
+    }
+}
+#endif
+
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
@@ -822,12 +891,66 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             ngx_queue_remove(q);
             s->count++;
         }
+#ifdef LIBPQ_HAS_ASYNC_CANCEL
+        if (s->conn) {
+            ngx_log_t *log = pc->log;
+            ngx_http_request_t *r = d->request;
+            ngx_http_upstream_t *u = r->upstream;
+            ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+            if (uscf->srv_conf) {
+                ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+                if (pscf && pscf->log) log = pscf->log;
+            }
+            PGcancelConn *cancel = PQcancelCreate(s->conn);
+            if (PQcancelStatus(cancel) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(cancel), "CONNECTION_BAD"); goto finish; }
+            if (!PQcancelStart(cancel)) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(cancel), "!PQcancelStart"); goto finish; }
+            ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PQcancelStart");
+            int fd;
+            if ((fd = PQcancelSocket(cancel)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQcancelSocket < 0"); goto finish; }
+            ngx_connection_t *c = ngx_get_connection(fd, log);
+            if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
+            c->addr_text = *pc->name;
+            c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
+            c->read->log = log;
+            c->shared = 1;
+            c->start_time = ngx_current_msec;
+            c->type = pc->type ? pc->type : SOCK_STREAM;
+            c->write->log = log;
+            if (!c->pool && !(c->pool = ngx_create_pool(128, log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
+            ngx_pq_cancel_t *q;
+            if (!(q = ngx_pcalloc(c->pool, sizeof(*q)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+            ngx_pool_cleanup_t *cln;
+            if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
+            cln->data = q;
+            cln->handler = ngx_pq_cancel_cln_handler;
+            c->read->handler = ngx_pq_cancel_read_handler;
+            c->write->handler = ngx_pq_cancel_write_handler;
+            if (ngx_add_conn) {
+                if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
+            } else {
+                if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
+                if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
+            }
+            q->cancel = cancel;
+            q->connection = c;
+            pc->connection = NULL;
+            goto cont;
+destroy:
+            ngx_destroy_pool(c->pool);
+close:
+            ngx_close_connection(c);
+finish:
+            PQcancelFinish(cancel);
+cont:
+        }
+#else
         PGcancel *cancel;
         if (s->conn && (cancel = PQgetCancel(s->conn))) {
             char errbuf[256];
             if (!PQcancel(cancel, errbuf, sizeof(errbuf))) ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel");
             PQfreeCancel(cancel);
         }
+#endif
     }
     if (pc->connection) return;
     ngx_log_t *log = pc->log;
