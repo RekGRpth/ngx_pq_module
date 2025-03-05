@@ -445,7 +445,10 @@ static ngx_int_t ngx_pq_notify(ngx_pq_save_t *s) {
                     break;
                 }
 #ifdef LIBPQ_HAS_PIPELINING
-                if (PQpipelineStatus(s->conn) == PQ_PIPELINE_OFF) if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); rc = NGX_ERROR; goto destroy; }
+                if (PQpipelineStatus(s->conn) == PQ_PIPELINE_OFF) {
+                    if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); rc = NGX_ERROR; goto destroy; }
+                    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQenterPipelineMode");
+                }
 #endif
                 PQExpBufferData sql;
                 initPQExpBuffer(&sql);
@@ -472,7 +475,10 @@ destroy:
         ngx_destroy_pool(p);
     }
 #ifdef LIBPQ_HAS_PIPELINING
-    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
+        if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); rc = NGX_ERROR; }
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQpipelineSync");
+    }
 #endif
     return rc;
 }
@@ -491,7 +497,10 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
     initPQExpBuffer(&name);
     initPQExpBuffer(&sql);
 #ifdef LIBPQ_HAS_PIPELINING
-    if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); goto ret; }
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_OFF) {
+        if (!PQenterPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQenterPipelineMode"); goto ret; }
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQenterPipelineMode");
+    }
 #endif
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
@@ -575,10 +584,13 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         }
     }
 #ifdef LIBPQ_HAS_PIPELINING
-    if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); goto ret; }
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
+        if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); goto ret; }
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQpipelineSync");
+    }
 #endif
     c->read->active = 1;
-    c->write->active = 0;
+    c->write->active = 1;
     rc = NGX_AGAIN;
 ret:
     termPQExpBuffer(&name);
@@ -941,7 +953,7 @@ close:
             ngx_close_connection(c);
 finish:
             PQcancelFinish(conn);
-cont:
+cont:;
         }
 #else
         PGcancel *cancel;
