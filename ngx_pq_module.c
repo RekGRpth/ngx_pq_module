@@ -163,7 +163,7 @@ typedef struct {
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
 typedef struct {
     ngx_connection_t *connection;
-    PGcancelConn *cancel;
+    PGcancelConn *conn;
 } ngx_pq_fail_t;
 #endif
 
@@ -615,9 +615,9 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
 static ngx_int_t ngx_pq_fail_poll(ngx_pq_fail_t *q) {
     ngx_connection_t *c = q->connection;
-    for (;;) switch (PQcancelPoll(q->cancel)) {
+    for (;;) switch (PQcancelPoll(q->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->conn), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
         case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_OK"); return NGX_OK;
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
@@ -699,8 +699,8 @@ static void ngx_pq_cancel_cln_handler(void *data) {
         ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
         ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
     }
-    if (q->cancel) PQcancelFinish(q->cancel);
-    q->cancel = NULL;
+    if (q->conn) PQcancelFinish(q->conn);
+    q->conn = NULL;
 }
 #endif
 static void ngx_pq_notice_processor(void *arg, const char *message) {
@@ -828,10 +828,10 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
 static void ngx_pq_fail_handler(ngx_pq_fail_t *q) {
     ngx_int_t rc = NGX_AGAIN;
-    switch (PQcancelStatus(q->cancel)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
+    switch (PQcancelStatus(q->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
-        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(q->cancel)); break;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(q->conn)); break;
     }
     rc = ngx_pq_fail_poll(q);
 ret:
@@ -931,7 +931,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
                 if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
                 if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
             }
-            q->cancel = cancel;
+            q->conn = cancel;
             q->connection = c;
             pc->connection = NULL;
             goto cont;
