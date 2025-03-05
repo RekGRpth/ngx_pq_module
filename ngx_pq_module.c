@@ -901,12 +901,12 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
                 ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
                 if (pscf && pscf->log) log = pscf->log;
             }
-            PGcancelConn *cancel = PQcancelCreate(s->conn);
-            if (PQcancelStatus(cancel) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(cancel), "CONNECTION_BAD"); goto finish; }
-            if (!PQcancelStart(cancel)) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(cancel), "!PQcancelStart"); goto finish; }
+            PGcancelConn *conn = PQcancelCreate(s->conn);
+            if (PQcancelStatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(conn), "CONNECTION_BAD"); goto finish; }
+            if (!PQcancelStart(conn)) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(conn), "!PQcancelStart"); goto finish; }
             ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "PQcancelStart");
             int fd;
-            if ((fd = PQcancelSocket(cancel)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQcancelSocket < 0"); goto finish; }
+            if ((fd = PQcancelSocket(conn)) < 0) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQcancelSocket < 0"); goto finish; }
             ngx_connection_t *c = ngx_get_connection(fd, log);
             if (!c) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_get_connection"); goto finish; }
             c->addr_text = *pc->name;
@@ -931,7 +931,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
                 if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
                 if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
             }
-            q->conn = cancel;
+            q->conn = conn;
             q->connection = c;
             pc->connection = NULL;
             goto cont;
@@ -940,7 +940,7 @@ destroy:
 close:
             ngx_close_connection(c);
 finish:
-            PQcancelFinish(cancel);
+            PQcancelFinish(conn);
 cont:
         }
 #else
