@@ -164,7 +164,7 @@ typedef struct {
 typedef struct {
     ngx_connection_t *connection;
     PGcancelConn *cancel;
-} ngx_pq_cancel_t;
+} ngx_pq_fail_t;
 #endif
 
 typedef struct {
@@ -613,7 +613,7 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return NGX_AGAIN;
 }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static ngx_int_t ngx_pq_cancel_poll(ngx_pq_cancel_t *q) {
+static ngx_int_t ngx_pq_cancel_poll(ngx_pq_fail_t *q) {
     ngx_connection_t *c = q->connection;
     for (;;) switch (PQcancelPoll(q->cancel)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
@@ -690,7 +690,7 @@ static void ngx_pq_save_cln_handler(void *data) {
 }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
 static void ngx_pq_cancel_cln_handler(void *data) {
-    ngx_pq_cancel_t *q = data;
+    ngx_pq_fail_t *q = data;
     ngx_connection_t *c = q->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     if (ngx_del_conn) {
@@ -826,7 +826,7 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
 }
 
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static void ngx_pq_cancel_handler(ngx_pq_cancel_t *q) {
+static void ngx_pq_cancel_handler(ngx_pq_fail_t *q) {
     ngx_int_t rc = NGX_AGAIN;
     switch (PQcancelStatus(q->cancel)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
@@ -845,7 +845,7 @@ static void ngx_pq_cancel_read_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
-        ngx_pq_cancel_t *q = cln->data;
+        ngx_pq_fail_t *q = cln->data;
         return ngx_pq_cancel_handler(q);
     }
 }
@@ -853,7 +853,7 @@ static void ngx_pq_cancel_write_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
-        ngx_pq_cancel_t *q = cln->data;
+        ngx_pq_fail_t *q = cln->data;
         return ngx_pq_cancel_handler(q);
     }
 }
@@ -917,7 +917,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             c->type = pc->type ? pc->type : SOCK_STREAM;
             c->write->log = log;
             if (!c->pool && !(c->pool = ngx_create_pool(128, log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
-            ngx_pq_cancel_t *q;
+            ngx_pq_fail_t *q;
             if (!(q = ngx_pcalloc(c->pool, sizeof(*q)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
             ngx_pool_cleanup_t *cln;
             if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
