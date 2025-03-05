@@ -826,17 +826,17 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
 }
 
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static void ngx_pq_fail_handler(ngx_pq_fail_t *q) {
+static void ngx_pq_fail_handler(ngx_pq_fail_t *f) {
     ngx_int_t rc = NGX_AGAIN;
-    switch (PQcancelStatus(q->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
-        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(q->conn)); break;
+    switch (PQcancelStatus(f->conn)) {
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, f->connection->log, 0, PQcancelErrorMessage(f->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(f->conn)); break;
     }
-    rc = ngx_pq_fail_poll(q);
+    rc = ngx_pq_fail_poll(f);
 ret:
     if (rc == NGX_OK) {
-        ngx_connection_t *c = q->connection;
+        ngx_connection_t *c = f->connection;
         ngx_destroy_pool(c->pool);
         ngx_close_connection(c);
     }
