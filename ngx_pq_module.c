@@ -826,7 +826,7 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
 }
 
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static void ngx_pq_cancel_handler(ngx_pq_fail_t *q) {
+static void ngx_pq_fail_handler(ngx_pq_fail_t *q) {
     ngx_int_t rc = NGX_AGAIN;
     switch (PQcancelStatus(q->cancel)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->cancel), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
@@ -846,7 +846,7 @@ static void ngx_pq_cancel_read_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
         ngx_pq_fail_t *q = cln->data;
-        return ngx_pq_cancel_handler(q);
+        return ngx_pq_fail_handler(q);
     }
 }
 static void ngx_pq_cancel_write_handler(ngx_event_t *ev) {
@@ -854,7 +854,7 @@ static void ngx_pq_cancel_write_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_cancel_cln_handler) {
         ngx_pq_fail_t *q = cln->data;
-        return ngx_pq_cancel_handler(q);
+        return ngx_pq_fail_handler(q);
     }
 }
 #endif
