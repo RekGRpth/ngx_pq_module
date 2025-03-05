@@ -487,8 +487,6 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
     ngx_connection_t *c = s->connection;
-    c->read->active = 0;
-    c->write->active = 0;
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
     ngx_int_t rc = NGX_ERROR;
@@ -591,8 +589,8 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
 #endif
     c->read->active = 1;
     switch (PQflush(s->conn)) {
-        case 0: break;
-        case 1: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQflush == 1"); c->read->active = 1; c->write->active = 1; break;
+        case 0: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQflush == 0"); c->write->active = 0; break;
+        case 1: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQflush == 1"); c->write->active = 1; break;
         case -1: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQflush == -1"); goto ret;
     }
     rc = NGX_AGAIN;
