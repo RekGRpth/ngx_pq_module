@@ -947,6 +947,7 @@ cont:
         PGcancel *cancel;
         if (s->conn && (cancel = PQgetCancel(s->conn))) {
             char errbuf[256];
+            ngx_log_error(NGX_LOG_WARN, pc->log, 0, "PQcancel is deprecated and insecure! Use libpq version 17+");
             if (!PQcancel(cancel, errbuf, sizeof(errbuf))) ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel");
             PQfreeCancel(cancel);
         }
