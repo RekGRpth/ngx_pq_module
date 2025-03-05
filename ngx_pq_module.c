@@ -613,7 +613,7 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return NGX_AGAIN;
 }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static ngx_int_t ngx_pq_cancel_poll(ngx_pq_fail_t *q) {
+static ngx_int_t ngx_pq_fail_poll(ngx_pq_fail_t *q) {
     ngx_connection_t *c = q->connection;
     for (;;) switch (PQcancelPoll(q->cancel)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
@@ -833,7 +833,7 @@ static void ngx_pq_cancel_handler(ngx_pq_fail_t *q) {
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PQcancelStatus = %i", PQcancelStatus(q->cancel)); break;
     }
-    rc = ngx_pq_cancel_poll(q);
+    rc = ngx_pq_fail_poll(q);
 ret:
     if (rc == NGX_OK) {
         ngx_connection_t *c = q->connection;
