@@ -690,8 +690,8 @@ static void ngx_pq_save_cln_handler(void *data) {
 }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
 static void ngx_pq_cancel_cln_handler(void *data) {
-    ngx_pq_fail_t *q = data;
-    ngx_connection_t *c = q->connection;
+    ngx_pq_fail_t *f = data;
+    ngx_connection_t *c = f->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     if (ngx_del_conn) {
         ngx_del_conn(c, NGX_CLOSE_EVENT);
@@ -699,8 +699,8 @@ static void ngx_pq_cancel_cln_handler(void *data) {
         ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
         ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
     }
-    if (q->conn) PQcancelFinish(q->conn);
-    q->conn = NULL;
+    if (f->conn) PQcancelFinish(f->conn);
+    f->conn = NULL;
 }
 #endif
 static void ngx_pq_notice_processor(void *arg, const char *message) {
