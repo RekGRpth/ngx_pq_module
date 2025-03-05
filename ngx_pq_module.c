@@ -613,14 +613,14 @@ static ngx_int_t ngx_pq_poll(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     return NGX_AGAIN;
 }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static ngx_int_t ngx_pq_fail_poll(ngx_pq_fail_t *q) {
-    ngx_connection_t *c = q->connection;
-    for (;;) switch (PQcancelPoll(q->conn)) {
-        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, q->connection->log, 0, PQcancelErrorMessage(q->conn), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
-        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_OK"); return NGX_OK;
-        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
-        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, q->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
+static ngx_int_t ngx_pq_fail_poll(ngx_pq_fail_t *f) {
+    ngx_connection_t *c = f->connection;
+    for (;;) switch (PQcancelPoll(f->conn)) {
+        case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "PGRES_POLLING_ACTIVE"); return NGX_AGAIN;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, f->connection->log, 0, PQcancelErrorMessage(f->conn), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
+        case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "PGRES_POLLING_OK"); return NGX_OK;
+        case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; return NGX_AGAIN;
+        case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, f->connection->log, 0, "PGRES_POLLING_WRITING"); c->read->active = 0; c->write->active = 1; break;
     }
     return NGX_AGAIN;
 }
