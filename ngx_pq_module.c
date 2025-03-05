@@ -917,11 +917,11 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             c->type = pc->type ? pc->type : SOCK_STREAM;
             c->write->log = log;
             if (!c->pool && !(c->pool = ngx_create_pool(128, log))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_create_pool"); goto close; }
-            ngx_pq_fail_t *q;
-            if (!(q = ngx_pcalloc(c->pool, sizeof(*q)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
+            ngx_pq_fail_t *f;
+            if (!(f = ngx_pcalloc(c->pool, sizeof(*f)))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pcalloc"); goto destroy; }
             ngx_pool_cleanup_t *cln;
             if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
-            cln->data = q;
+            cln->data = f;
             cln->handler = ngx_pq_fail_cln_handler;
             c->read->handler = ngx_pq_fail_read_handler;
             c->write->handler = ngx_pq_fail_write_handler;
@@ -931,8 +931,8 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
                 if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
                 if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
             }
-            q->conn = conn;
-            q->connection = c;
+            f->conn = conn;
+            f->connection = c;
             pc->connection = NULL;
             goto cont;
 destroy:
