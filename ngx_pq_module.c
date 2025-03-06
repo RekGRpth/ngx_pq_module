@@ -663,7 +663,10 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         default: rc = ngx_pq_res_default(s, d, res); break;
     }
 #ifdef LIBPQ_HAS_PIPELINING
-    if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
+        if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQexitPipelineMode");
+    }
 #endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
