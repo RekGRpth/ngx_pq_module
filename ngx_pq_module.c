@@ -761,6 +761,10 @@ found:
     port.len -= host.len + 1;
     if (pc->sockaddr->sa_family != AF_UNIX) {
         appendPQExpBufferStr(&conninfo, " hostaddr=");
+        if (host.data[0] == '[' && host.data[host.len - 1] == ']') {
+            host.data++;
+            host.len -= 2;
+        }
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     } else {
         appendPQExpBufferStr(&conninfo, " host=");
