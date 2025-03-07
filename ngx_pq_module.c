@@ -851,8 +851,9 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
 }
 
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-static void ngx_pq_fail_handler(ngx_pq_fail_t *f) {
-    ngx_connection_t *c = f->connection;
+static void ngx_pq_fail_handler(ngx_event_t *ev) {
+    ngx_connection_t *c = ev->data;
+    ngx_pq_fail_t *f = c->data;
     ngx_int_t rc = NGX_AGAIN;
     switch (PQcancelStatus(f->conn)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQcancelErrorMessage(f->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
@@ -864,22 +865,6 @@ ret:
     if (rc == NGX_OK) {
         ngx_destroy_pool(c->pool);
         ngx_close_connection(c);
-    }
-}
-static void ngx_pq_fail_read_handler(ngx_event_t *ev) {
-    ngx_connection_t *c = ev->data;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
-    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_fail_cln_handler) {
-        ngx_pq_fail_t *q = cln->data;
-        return ngx_pq_fail_handler(q);
-    }
-}
-static void ngx_pq_fail_write_handler(ngx_event_t *ev) {
-    ngx_connection_t *c = ev->data;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
-    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_fail_cln_handler) {
-        ngx_pq_fail_t *q = cln->data;
-        return ngx_pq_fail_handler(q);
     }
 }
 #endif
@@ -948,8 +933,9 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             if (!(cln = ngx_pool_cleanup_add(c->pool, 0))) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!ngx_pool_cleanup_add"); goto destroy; }
             cln->data = f;
             cln->handler = ngx_pq_fail_cln_handler;
-            c->read->handler = ngx_pq_fail_read_handler;
-            c->write->handler = ngx_pq_fail_write_handler;
+            c->data = f;
+            c->read->handler = ngx_pq_fail_handler;
+            c->write->handler = ngx_pq_fail_handler;
             if (ngx_add_conn) {
                 if (ngx_add_conn(c) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_conn != NGX_OK"); goto destroy; }
             } else {
