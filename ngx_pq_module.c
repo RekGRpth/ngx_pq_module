@@ -1037,12 +1037,12 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     ngx_connection_t *c = s->connection;
     ngx_int_t rc = NGX_AGAIN;
     switch (PQstatus(s->conn)) {
-        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, r->connection->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
-        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "CONNECTION_OK");
+        case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
+        case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "CONNECTION_OK");
             if (c->read->timedout || c->write->timedout) return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
             rc = ngx_pq_result(s, d);
             goto ret;
-        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "PQstatus = %i", PQstatus(s->conn)); break;
+        default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQstatus = %i", PQstatus(s->conn)); break;
     }
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
     rc = ngx_pq_poll(s, d);
