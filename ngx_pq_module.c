@@ -646,15 +646,16 @@ again:
 }
 #endif
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%s", __func__);
-    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
+    ngx_connection_t *c = s->connection;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
+    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
     ngx_int_t rc = NGX_OK;
     for (PGresult *res; ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))) && PQstatus(s->conn) == CONNECTION_OK; PQclear(res)) switch (PQresultStatus(res)) {
         case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
         case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
         case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
 #ifdef LIBPQ_HAS_PIPELINING
-        case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PGRES_PIPELINE_SYNC"); break;
+        case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); break;
 #endif
         case PGRES_TUPLES_OK:
 #ifdef LIBPQ_HAS_CHUNK_MODE
@@ -666,25 +667,24 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     }
 #ifdef LIBPQ_HAS_PIPELINING
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
-        if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
-        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQexitPipelineMode");
+        if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
+        ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQexitPipelineMode");
     }
 #endif
     if (rc == NGX_OK) rc = ngx_pq_notify(s);
-    if (s->count) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
+    if (s->count) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
     if (d) {
-        if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
+        if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
         if (rc == NGX_OK && d->type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
     } else if (!s->keepalive) {
-        ngx_connection_t *c = s->connection;
         ngx_destroy_pool(c->pool);
         ngx_close_connection(c);
         return rc;
     }
     if (s->keepalive && s->conn->inBufSize > s->inBufSize) {
-        ngx_log_error(NGX_LOG_WARN, s->connection->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
+        ngx_log_error(NGX_LOG_WARN, c->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
         char *newbuf;
-        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
+        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
         s->conn->inBuffer = newbuf;
         s->conn->inBufSize = s->inBufSize;
     }
