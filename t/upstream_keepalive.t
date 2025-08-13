@@ -33,7 +33,8 @@ __DATA__
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
         pq_query "select 1" output=value;
     }
 --- request
@@ -93,7 +94,8 @@ user: postgres
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
         pq_query "select 1/0";
     }
 --- request
@@ -152,7 +154,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345
@@ -207,7 +210,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345
@@ -262,7 +266,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345&c=67&d=89
@@ -317,7 +322,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=qwe&c=89
@@ -372,7 +378,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=89&c=qwe
@@ -427,7 +434,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         pq_execute query $arg_a $arg_b $arg_c output=plain;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=qwe&c=89
@@ -483,7 +491,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345
@@ -539,7 +548,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345
@@ -595,7 +605,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c $arg_d output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=12&b=345&c=67&d=89
@@ -651,7 +662,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=qwe&c=89
@@ -707,7 +719,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=89&c=qwe
@@ -763,7 +776,8 @@ user: postgres
         add_header user $pq_user always;
         default_type text/csv;
         pq_execute query $arg_a $arg_b $arg_c output=csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
     }
 --- request
 GET /?a=34&b=qwe&c=89
@@ -816,7 +830,8 @@ user: postgres
         add_header standard-conforming-strings $pq_standard_conforming_strings always;
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
         pq_query "do $$ begin raise info '%', 1;end;$$";
     }
 --- request
@@ -869,7 +884,8 @@ user: postgres
         add_header transaction-status $pq_transaction_status always;
         add_header user $pq_user always;
         default_type text/csv;
-        pq_pass pg;
+        set $pg pg;
+        pq_pass $pg;
         pq_query "copy (select 34 as ab, 'qwe' as cde union select 89, null order by 1) to stdout with (format csv, header true)" output=value;
     }
 --- request
