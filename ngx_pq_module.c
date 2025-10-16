@@ -1721,6 +1721,7 @@ static ngx_conf_enum_t ngx_pq_empty[] = {
     { ngx_string("401"), NGX_HTTP_UNAUTHORIZED },
     { ngx_string("403"), NGX_HTTP_FORBIDDEN },
     { ngx_string("404"), NGX_HTTP_NOT_FOUND },
+    { ngx_string("409"), NGX_HTTP_CONFLICT },
     { ngx_null_string, 0 }
 };
 

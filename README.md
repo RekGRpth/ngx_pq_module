@@ -4,7 +4,7 @@
 
 pq_empty
 -------------
-* Syntax: **pq_empty** *200* | *204* | *400* | *401* | *403* | *404*
+* Syntax: **pq_empty** *200* | *204* | *400* | *401* | *403* | *404* | *409*
 * Default: 200
 * Context: main, server, location, if in location
 
