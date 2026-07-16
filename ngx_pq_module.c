@@ -1340,7 +1340,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
         if (str[i].len >= sizeof("escape=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"escape=", sizeof("escape=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(str[i].len - (sizeof("escape=") - 1))) { query->escape = '\0'; continue; }
-            else if (str[i].len > 1) return "\"escape\" value must be one character";
+            else if (str[i].len - (sizeof("escape=") - 1) > 1) return "\"escape\" value must be one character";
             query->escape = str[i].data[sizeof("escape=") - 1];
             continue;
         }
