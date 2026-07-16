@@ -1128,6 +1128,7 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     ngx_pq_variable_t *variable;
     variables = &d->variables;
     variable = variables->elts;
+    v->len = 0;
     for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == index) {
         for (ngx_chain_t *cl = variable[i].cl; cl; cl = cl->next) v->len += cl->buf->last - cl->buf->pos;
         u_char *p;
