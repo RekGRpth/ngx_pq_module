@@ -805,3 +805,49 @@ user: postgres
 GET /
 --- error_code: 404
 --- timeout: 60
+
+=== TEST 18:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        add_header my-var $myvar always;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 42" output=$myvar;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 1
+Content-Type: text/plain
+my-var: 42
+--- response_body chomp
+1
+--- timeout: 60
+
+=== TEST 19:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        add_header my-var $myvar always;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 34 as ab, 'qwe' as cde" output=$myvar delimiter=,;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 1
+Content-Type: text/plain
+my-var: 34,qwe
+--- response_body chomp
+1
+--- timeout: 60
