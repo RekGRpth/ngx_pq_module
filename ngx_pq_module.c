@@ -181,6 +181,7 @@ typedef struct {
 
 typedef struct {
     ngx_chain_t *cl;
+    ngx_chain_t *last;
     ngx_int_t index;
 } ngx_pq_variable_t;
 
@@ -227,11 +228,12 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
             if (!(variable = ngx_array_push(variables))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
             ngx_memzero(variable, sizeof(*variable));
             variable->index = query->index;
-            if (!(cl = variable->cl = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            if (!(cl = variable->cl = variable->last = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
         } else {
             variable = &variable[i];
-            cl = variable->cl;
+            cl = variable->last;
             if (!(cl = cl->next = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            variable->last = cl;
         }
         cl->next = NULL;
         if (!(cl->buf = ngx_create_temp_buf(c->pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }

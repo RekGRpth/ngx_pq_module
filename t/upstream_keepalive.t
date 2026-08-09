@@ -940,3 +940,29 @@ my-var: 42
 --- response_body chomp
 1
 --- timeout: 60
+
+=== TEST 18:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        pq_query "select 'ab' union select 'cd' order by 1" output=$myvar;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select length($1)" $myvar output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 1
+Content-Type: text/plain
+--- response_body chomp
+5
+--- timeout: 60
