@@ -223,8 +223,8 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
         for (i = 0; i < variables->nelts; i++) if (variable[i].index == query->index) break;
         ngx_chain_t *cl;
         if (i == variables->nelts) {
-            if (!variables->elts && ngx_array_init(&s->variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
-            if (!(variable = ngx_array_push(&s->variables))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
+            if (!variables->elts && ngx_array_init(variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
+            if (!(variable = ngx_array_push(variables))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
             ngx_memzero(variable, sizeof(*variable));
             variable->index = query->index;
             if (!(cl = variable->cl = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }

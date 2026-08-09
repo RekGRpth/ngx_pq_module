@@ -912,3 +912,31 @@ user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
 --- timeout: 60
+
+=== TEST 17:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        pq_query "select 42" output=$myvar;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        add_header my-var $myvar always;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 1
+Content-Type: text/plain
+my-var: 42
+--- response_body chomp
+1
+--- timeout: 60
