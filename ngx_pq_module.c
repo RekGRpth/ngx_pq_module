@@ -170,6 +170,7 @@ typedef struct {
 typedef struct {
     ngx_array_t variables;
     ngx_flag_t empty;
+    ngx_flag_t tuples;
     ngx_http_request_t *request;
     ngx_int_t row;
     ngx_peer_connection_t peer;
@@ -383,7 +384,7 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
     }
     if (PQresultStatus(res) == PGRES_TUPLES_OK && s->count) { s->count--; return NGX_OK; }
     if (!d) return NGX_OK;
-    d->empty |= PQntuples(res) == 0;
+    if (!d->tuples) { d->tuples = 1; d->empty = PQntuples(res) == 0; } else if (PQntuples(res)) d->empty = 0;
     if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     if (PQresultStatus(res) == PGRES_TUPLES_OK) { ngx_queue_remove(q); }
