@@ -870,3 +870,20 @@ GET /
 --- response_body chomp
 42
 --- timeout: 60
+
+=== TEST 21:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select repeat('a', 200000)" output=value string=on quote=" escape=";
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 200002
+--- timeout: 5

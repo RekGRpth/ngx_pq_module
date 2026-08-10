@@ -169,6 +169,7 @@ typedef struct {
 
 typedef struct {
     ngx_array_t variables;
+    ngx_chain_t *last;
     ngx_flag_t empty;
     ngx_flag_t tuples;
     ngx_http_request_t *request;
@@ -242,10 +243,10 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
     } else if (query->output) {
         ngx_connection_t *c = r->connection;
         ngx_http_upstream_t *u = r->upstream;
-        ngx_chain_t *cl, **ll;
-        for (cl = u->out_bufs, ll = &u->out_bufs; cl; cl = cl->next) ll = &cl->next;
+        ngx_chain_t *cl;
         if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
-        *ll = cl;
+        if (d->last) d->last->next = cl; else u->out_bufs = cl;
+        d->last = cl;
         ngx_buf_t *b = cl->buf;
         if (b->start) ngx_pfree(r->pool, b->start);
         if (!(b->start = ngx_palloc(r->pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_palloc"); return NGX_ERROR; }
