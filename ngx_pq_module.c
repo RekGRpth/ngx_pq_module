@@ -115,6 +115,8 @@ typedef struct {
 
 typedef struct {
     const char **paramValues;
+    int *paramFormats;
+    int *paramLengths;
     ngx_flag_t not_first;
     ngx_pq_query_t *query;
     ngx_queue_t queue;
@@ -523,6 +525,8 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         ngx_pq_argument_t *argument = query[i].arguments.elts;
         if (!(qq->paramTypes = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramTypes)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); goto ret; }
         if (!(qq->paramValues = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramValues)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); goto ret; }
+        if (!(qq->paramLengths = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramLengths)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); goto ret; }
+        if (!(qq->paramFormats = ngx_pcalloc(r->pool, query[i].arguments.nelts * sizeof(*qq->paramFormats)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); goto ret; }
         for (ngx_uint_t j = 0; j < query[i].arguments.nelts; j++) {
             if (query[i].type & (ngx_pq_type_query|ngx_pq_type_prepare)) {
                 if (argument[j].oid.complex.value.data) {
@@ -540,8 +544,17 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                     if (ngx_http_complex_value(r, &argument[j].value.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_http_complex_value != NGX_OK"); goto ret; }
                     argument[j].value.str = value;
                 }
-                if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len + 1))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
-                (void)ngx_cpystrn((u_char *)qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len + 1);
+                /* only pq_query knows the argument's oid locally (pq_execute's was fixed by the matching pq_prepare); binary format is only safe here for oids whose wire format is the raw string bytes */
+                Oid oid = (query[i].type & ngx_pq_type_query) ? qq->paramTypes[j] : 1 /* anything not in the safe set below */;
+                if (oid == 0 /* unspecified */ || oid == 25 /* TEXTOID */ || oid == 1043 /* VARCHAROID */) {
+                    if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
+                    ngx_memcpy((u_char *)qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len);
+                    qq->paramLengths[j] = argument[j].value.str.len;
+                    qq->paramFormats[j] = 1;
+                } else {
+                    if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len + 1))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
+                    (void)ngx_cpystrn((u_char *)qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len + 1);
+                }
             }
         }
         resetPQExpBuffer(&sql);
@@ -556,7 +569,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         } else appendBinaryPQExpBuffer(&sql, (char *)command[j].str.data, command[j].str.len);
         if (PQExpBufferDataBroken(sql)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "PQExpBufferDataBroken"); goto ret; }
         if (query[i].type & ngx_pq_type_query) {
-            if (!PQsendQueryParams(s->conn, sql.data, query[i].arguments.nelts, qq->paramTypes, qq->paramValues, NULL, NULL, query[i].output == ngx_pq_output_binary)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsendQueryParams"); rc = NGX_DECLINED; goto ret; }
+            if (!PQsendQueryParams(s->conn, sql.data, query[i].arguments.nelts, qq->paramTypes, qq->paramValues, qq->paramLengths, qq->paramFormats, query[i].output == ngx_pq_output_binary)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsendQueryParams"); rc = NGX_DECLINED; goto ret; }
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsendQueryParams('%s')", sql.data);
 #ifdef LIBPQ_HAS_CHUNK_MODE
             if (query[i].chunkSize > 0) {

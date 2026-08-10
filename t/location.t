@@ -956,3 +956,21 @@ GET /
 --- error_log
 NOTICE:  hello from tagged doblock
 --- timeout: 60
+
+=== TEST 26:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select length($1)" $request_body output=value;
+    }
+--- request eval
+"POST /\nab\x{00}cd"
+--- error_code: 502
+--- error_log
+invalid byte sequence for encoding "UTF8": 0x00
+--- timeout: 60
