@@ -196,10 +196,10 @@ static u_char *ngx_pq_log_error_handler(ngx_log_t *log, u_char *buf, size_t len)
     len -= p - buf;
     buf = p;
     if (original->message) {
-        int msg_len = strlen(original->message);
+        size_t msg_len = ngx_strlen(original->message);
         if (msg_len) {
-            if (original->message[msg_len - 1] == '\n') original->message[msg_len - 1] = '\0';
-            p = ngx_snprintf(buf, len, "\n%s", original->message);
+            if (original->message[msg_len - 1] == '\n') msg_len--;
+            p = ngx_snprintf(buf, len, "\n%*s", msg_len, original->message);
             buf = p;
         }
     }

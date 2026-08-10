@@ -887,3 +887,21 @@ GET /
 --- response_headers
 Content-Length: 200002
 --- timeout: 5
+
+=== TEST 22:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1/0";
+    }
+--- request
+GET /
+--- error_code: 502
+--- error_log
+PGRES_FATAL_ERROR
+ERROR:  division by zero
+--- timeout: 60
