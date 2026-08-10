@@ -21,11 +21,12 @@ pq_execute
 * Default: --
 * Context: location, if in location, upstream
 
-Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (upstream only, create nginx variable) for execute:
+Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for execute:
 ```nginx
 location =/postgres {
     pq_execute $query string $argument output=plain; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and plain output type
     pq_execute $query string $argument output=value; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and value output type
+    pq_execute $query string $argument output=$variable; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and output to $variable variable
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
     pq_pass postgres; # upstream is postgres
 }
@@ -37,6 +38,7 @@ upstream postgres {
     server postgres:5432; # host is postgres and port is 5432
 }
 ```
+Note: in location, output=$variable is populated per request, same as location queries in general. In upstream, output=$variable is populated once when a new backend connection is established (it runs before the location's own queries) and keeps its value for every subsequent request that reuses that connection (e.g. with keepalive) until the connection is closed.
 pq_level
 -------------
 * Syntax: **pq_level** *level* "*message*"
@@ -153,7 +155,7 @@ pq_query
 * Default: --
 * Context: location, if in location, upstream
 
-Sets sql (named only nginx variables allowed as identifier only), optional (several) $argument_value (nginx variables allowed), $argument_oid (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (upstream only, create nginx variable) for prepare and execute:
+Sets sql (named only nginx variables allowed as identifier only), optional (several) $argument_value (nginx variables allowed), $argument_oid (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for prepare and execute:
 ```nginx
 location =/postgres {
     pq_pass postgres; # upstream is postgres
@@ -173,6 +175,16 @@ location =/postgres {
 location =/postgres {
     pq_pass postgres; # upstream is postgres
     pq_query "SELECT $1, $2::text" string::25 $arg output=plain; # prepare and execute extended query with two arguments (first argument is string and its oid is 25 (TEXTOID) and second argument is taken from $arg variable and auto oid) and plain output type
+}
+# or
+location =/postgres {
+    pq_pass postgres; # upstream is postgres
+    pq_query "SELECT now()" output=$variable; # prepare and execute simple query and output to $variable variable
+}
+# or
+location =/postgres {
+    pq_pass postgres; # upstream is postgres
+    pq_query "do $$ begin raise notice 'hello'; end $$"; # Postgres dollar-quoted body ($$...$$ or $tag$...$tag$) is passed through as-is and not scanned for nginx variables
 }
 ```
 # Embedded Variables
