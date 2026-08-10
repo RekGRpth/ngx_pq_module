@@ -905,3 +905,54 @@ GET /
 PGRES_FATAL_ERROR
 ERROR:  division by zero
 --- timeout: 60
+
+=== TEST 23:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "do $$ begin raise notice 'hello from doblock'; end $$";
+    }
+--- request
+GET /
+--- error_code: 200
+--- error_log
+NOTICE:  hello from doblock
+--- timeout: 60
+
+=== TEST 24:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 as $arg_a$arg_b" output=value;
+    }
+--- request
+GET /?a=foo&b=bar
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 60
+
+=== TEST 25:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "do $plpgsql$ begin raise notice 'hello from tagged doblock'; end $plpgsql$";
+    }
+--- request
+GET /
+--- error_code: 200
+--- error_log
+NOTICE:  hello from tagged doblock
+--- timeout: 60

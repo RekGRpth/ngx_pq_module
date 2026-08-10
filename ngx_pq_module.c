@@ -1546,34 +1546,57 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
     u_char *n = b;
     u_char *s = n;
     while (s < e) {
-        if (*s++ == '$') {
-            if ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_') {
+        if (*s != '$') { s++; continue; }
+        u_char *q = s;
+        u_char *t = q + 1;
+        if (t < e && ((*t >= 'a' && *t <= 'z') || (*t >= 'A' && *t <= 'Z') || *t == '_')) {
+            t++;
+            while (t < e && ((*t >= '0' && *t <= '9') || (*t >= 'a' && *t <= 'z') || (*t >= 'A' && *t <= 'Z') || *t == '_')) t++;
+        }
+        if (t < e && *t == '$') { /* candidate Postgres dollar-quote opening: $tag$ (tag may be empty) */
+            size_t dlen = (size_t)(t - q) + 1;
+            u_char *k = t + 1;
+            u_char *close = NULL;
+            while (k + dlen <= e) { if (!ngx_strncmp(k, q, dlen)) { close = k; break; } k++; }
+            if (close) {
+                if (n < q) {
+                    if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+                    ngx_memzero(command, sizeof(*command));
+                    command->str.data = n;
+                    command->str.len = q - n;
+                }
                 if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
                 ngx_memzero(command, sizeof(*command));
-                command->str.data = n;
-                command->str.len = s - n - 1;
-                n = s;
-                while (s < e && ((*s >= '0' && *s <= '9') || (*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_')) s++;
-                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
-                ngx_memzero(command, sizeof(*command));
-                command->str.data = n;
-                command->str.len = s - n;
-                n = s;
-                if (*s != '$') if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
-            } else {
-                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
-                ngx_memzero(command, sizeof(*command));
-                command->str.data = n;
-                command->str.len = s - n;
-                n = s;
+                command->str.data = q;
+                command->str.len = close + dlen - q;
+                n = s = close + dlen;
+                continue;
             }
         }
+        if (q + 1 < e && ((*(q + 1) >= 'a' && *(q + 1) <= 'z') || (*(q + 1) >= 'A' && *(q + 1) <= 'Z') || *(q + 1) == '_')) {
+            if (n < q) {
+                if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+                ngx_memzero(command, sizeof(*command));
+                command->str.data = n;
+                command->str.len = q - n;
+            }
+            u_char *v = q + 1;
+            while (v < e && ((*v >= '0' && *v <= '9') || (*v >= 'a' && *v <= 'z') || (*v >= 'A' && *v <= 'Z') || *v == '_')) v++;
+            if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
+            ngx_memzero(command, sizeof(*command));
+            command->str.data = q + 1;
+            command->str.len = v - (q + 1);
+            if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            n = s = v;
+            continue;
+        }
+        s++;
     }
-    if (n < s) {
+    if (n < e) {
         if (!(command = ngx_array_push(&query->commands))) return "!ngx_array_push";
         ngx_memzero(command, sizeof(*command));
         command->str.data = n;
-        command->str.len = s - n;
+        command->str.len = e - n;
     }
     return ngx_pq_argument_output_loc_conf(cf, query);
 }
