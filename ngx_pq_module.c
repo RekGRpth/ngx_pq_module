@@ -1348,7 +1348,7 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
 static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *query) {
     ngx_str_t *str = cf->args->elts;
     for (ngx_uint_t i = query->type & ngx_pq_type_prepare ? 3 : 2; i < cf->args->nelts; i++) {
-        if (str[i].len > sizeof("delimiter=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"delimiter=", sizeof("delimiter=") - 1)) {
+        if (str[i].len >= sizeof("delimiter=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"delimiter=", sizeof("delimiter=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(str[i].len - (sizeof("delimiter=") - 1))) return "empty \"delimiter\" value";
             if (str[i].len - (sizeof("delimiter=") - 1) > 1) return "\"delimiter\" value must be one character";
@@ -1362,7 +1362,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             query->escape = str[i].data[sizeof("escape=") - 1];
             continue;
         }
-        if (str[i].len > sizeof("header=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"header=", sizeof("header=") - 1)) {
+        if (str[i].len >= sizeof("header=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"header=", sizeof("header=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("off"), 0 }, { ngx_string("no"), 0 }, { ngx_string("false"), 0 }, { ngx_string("on"), 1 }, { ngx_string("yes"), 1 }, { ngx_string("true"), 1 }, { ngx_null_string, 0 } };
@@ -1371,7 +1371,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             query->header = e[j].value;
             continue;
         }
-        if (str[i].len > sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
+        if (str[i].len >= sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
             if (str[i].data[sizeof("output=") - 1] == '$' && query->type & (ngx_pq_type_upstream|ngx_pq_type_location)) {
                 ngx_str_t name = str[i];
                 name.data += sizeof("output=") - 1 + 1;
@@ -1406,7 +1406,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             }
             continue;
         }
-        if (str[i].len > sizeof("null=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"null=", sizeof("null=") - 1)) {
+        if (str[i].len >= sizeof("null=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"null=", sizeof("null=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             if (!(query->null.len = str[i].len - (sizeof("null=") - 1))) return "empty \"null\" value";
             query->null.data = &str[i].data[sizeof("null=") - 1];
@@ -1419,7 +1419,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             query->quote = str[i].data[sizeof("quote=") - 1];
             continue;
         }
-        if (str[i].len > sizeof("string=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"string=", sizeof("string=") - 1)) {
+        if (str[i].len >= sizeof("string=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"string=", sizeof("string=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_uint_t j;
             static const ngx_conf_enum_t e[] = { { ngx_string("off"), 0 }, { ngx_string("no"), 0 }, { ngx_string("false"), 0 }, { ngx_string("on"), 1 }, { ngx_string("yes"), 1 }, { ngx_string("true"), 1 }, { ngx_null_string, 0 } };
@@ -1429,7 +1429,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             continue;
         }
 #ifdef LIBPQ_HAS_CHUNK_MODE
-        if (str[i].len > sizeof("chunkSize=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"chunkSize=", sizeof("chunkSize=") - 1)) {
+        if (str[i].len >= sizeof("chunkSize=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"chunkSize=", sizeof("chunkSize=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_int_t n = ngx_atoi(str[i].data + sizeof("chunkSize=") - 1, str[i].len - (sizeof("chunkSize=") - 1));
             if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";

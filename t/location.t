@@ -974,3 +974,18 @@ NOTICE:  hello from tagged doblock
 --- error_log
 invalid byte sequence for encoding "UTF8": 0x00
 --- timeout: 60
+
+=== TEST 27:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1" delimiter=;
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+empty "delimiter" value
