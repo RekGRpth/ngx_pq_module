@@ -562,7 +562,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         for (ngx_uint_t j = 0; j < query[i].commands.nelts; j++) if (command[j].index) {
             char *str;
             ngx_http_variable_value_t *value;
-            if (!(value = ngx_http_get_indexed_variable(r, command[j].index))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
+            if (!(value = ngx_http_get_indexed_variable(r, command[j].index - 1))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_http_get_indexed_variable"); goto ret; }
             if (!(str = PQescapeIdentifier(s->conn, (char *)value->data, value->len))) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQescapeIdentifier"); goto ret; }
             appendPQExpBufferStr(&sql, str);
             PQfreemem(str);
@@ -1378,7 +1378,9 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
                 name.len -= sizeof("output=") - 1 + 1;
                 ngx_http_variable_t *variable;
                 if (!(variable = ngx_http_add_variable(cf, &name, NGX_HTTP_VAR_CHANGEABLE))) return "!ngx_http_add_variable";
-                if ((query->index = ngx_http_get_variable_index(cf, &name)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+                ngx_int_t index;
+                if ((index = ngx_http_get_variable_index(cf, &name)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+                query->index = index + 1; /* +1: 0 means "no output variable", but a real variable index can legitimately be 0 */
                 variable->get_handler = ngx_pq_variable_get_handler;
                 variable->data = query->index;
                 continue;
@@ -1599,7 +1601,9 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
             ngx_memzero(command, sizeof(*command));
             command->str.data = q + 1;
             command->str.len = v - (q + 1);
-            if ((command->index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            ngx_int_t index;
+            if ((index = ngx_http_get_variable_index(cf, &command->str)) == NGX_ERROR) return "ngx_http_get_variable_index == NGX_ERROR";
+            command->index = index + 1; /* +1: 0 means "literal text", but a real variable index can legitimately be 0 */
             n = s = v;
             continue;
         }
