@@ -216,11 +216,14 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
     if (query->index) {
         ngx_array_t *variables;
         ngx_connection_t *c;
+        ngx_pool_t *pool;
         if (query->type & ngx_pq_type_upstream) {
             c = s->connection;
+            pool = c->pool;
             variables = &s->variables;
         } else if (query->type & ngx_pq_type_location) {
             c = r->connection;
+            pool = r->pool;
             variables = &d->variables;
         } else return NGX_OK;
         ngx_pq_variable_t *variable = variables->elts;
@@ -228,19 +231,19 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
         for (i = 0; i < variables->nelts; i++) if (variable[i].index == query->index) break;
         ngx_chain_t *cl;
         if (i == variables->nelts) {
-            if (!variables->elts && ngx_array_init(variables, c->pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
+            if (!variables->elts && ngx_array_init(variables, pool, 1, sizeof(*variable)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
             if (!(variable = ngx_array_push(variables))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
             ngx_memzero(variable, sizeof(*variable));
             variable->index = query->index;
-            if (!(cl = variable->cl = variable->last = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            if (!(cl = variable->cl = variable->last = ngx_alloc_chain_link(pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
         } else {
             variable = &variable[i];
             cl = variable->last;
-            if (!(cl = cl->next = ngx_alloc_chain_link(c->pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            if (!(cl = cl->next = ngx_alloc_chain_link(pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
             variable->last = cl;
         }
         cl->next = NULL;
-        if (!(cl->buf = ngx_create_temp_buf(c->pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
+        if (!(cl->buf = ngx_create_temp_buf(pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
         cl->buf->last = ngx_copy(cl->buf->last, data, len);
     } else if (query->output) {
         ngx_connection_t *c = r->connection;
