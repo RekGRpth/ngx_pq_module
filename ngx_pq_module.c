@@ -291,13 +291,20 @@ static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGres
     if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
         ngx_pq_command_t *command = query->commands.elts;
         command = &command[1];
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &command->str);
+        ngx_str_t channel = command->str;
+        if (command->index) {
+            ngx_http_variable_value_t *v;
+            if (!(v = ngx_http_get_indexed_variable(d->request, command->index - 1))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+            channel.data = v->data;
+            channel.len = v->len;
+        }
+        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &channel);
         ngx_pq_channel_queue_t *cq;
         ngx_connection_t *c = s->connection;
         if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
         ngx_queue_insert_tail(&s->queue, &cq->queue);
-        if (!(cq->channel.data = ngx_pstrdup(c->pool, &command->str))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
-        cq->channel.len = command->str.len;
+        if (!(cq->channel.data = ngx_pstrdup(c->pool, &channel))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+        cq->channel.len = channel.len;
     }
     return NGX_OK;
 }
