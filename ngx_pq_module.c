@@ -118,6 +118,7 @@ typedef struct {
     int *paramFormats;
     int *paramLengths;
     ngx_flag_t not_first;
+    ngx_flag_t not_first_row;
     ngx_pq_query_t *query;
     ngx_queue_t queue;
     Oid *paramTypes;
@@ -434,7 +435,8 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
         }
     }
     for (int row = 0; row < PQntuples(res); row++, d->row++) {
-        if (d->row > 0 || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
+        if (qq->not_first_row || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
+        qq->not_first_row = 1;
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
             if (PQgetisnull(res, row, col)) {
