@@ -302,12 +302,19 @@ static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGres
             channel.len = v->len;
         }
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &channel);
-        ngx_pq_channel_queue_t *cq;
-        ngx_connection_t *c = s->connection;
-        if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-        ngx_queue_insert_tail(&s->queue, &cq->queue);
-        if (!(cq->channel.data = ngx_pstrdup(c->pool, &channel))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
-        cq->channel.len = channel.len;
+        ngx_flag_t tracked = 0;
+        for (ngx_queue_t *q = ngx_queue_head(&s->queue); q != ngx_queue_sentinel(&s->queue); q = ngx_queue_next(q)) {
+            ngx_pq_channel_queue_t *cq = ngx_queue_data(q, ngx_pq_channel_queue_t, queue);
+            if (cq->channel.len == channel.len && !ngx_strncmp(cq->channel.data, channel.data, channel.len)) { tracked = 1; break; }
+        }
+        if (!tracked) {
+            ngx_pq_channel_queue_t *cq;
+            ngx_connection_t *c = s->connection;
+            if (!(cq = ngx_pcalloc(c->pool, sizeof(*cq)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+            ngx_queue_insert_tail(&s->queue, &cq->queue);
+            if (!(cq->channel.data = ngx_pstrdup(c->pool, &channel))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+            cq->channel.len = channel.len;
+        }
     }
     return NGX_OK;
 }
