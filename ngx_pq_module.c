@@ -800,8 +800,9 @@ found:
         }
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     } else {
+        if (host.len < sizeof("unix:") - 1 || ngx_strncmp(host.data, (u_char *)"unix:", sizeof("unix:") - 1)) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "invalid unix socket address \"%V\", expected \"unix:/socket:port\"", pc->name); termPQExpBuffer(&conninfo); return NGX_ERROR; }
         appendPQExpBufferStr(&conninfo, " host=");
-        appendBinaryPQExpBuffer(&conninfo, (char *)host.data + 5, host.len - 5);
+        appendBinaryPQExpBuffer(&conninfo, (char *)host.data + (sizeof("unix:") - 1), host.len - (sizeof("unix:") - 1));
     }
     appendPQExpBufferStr(&conninfo, " port=");
     appendBinaryPQExpBuffer(&conninfo, (char *)port.data, port.len);
