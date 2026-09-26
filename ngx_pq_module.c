@@ -720,10 +720,19 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     }
     if (s->keepalive && s->conn->inBufSize > s->inBufSize) {
         ngx_log_error(NGX_LOG_WARN, c->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
+        PGconn *conn = s->conn;
+        int len = conn->inEnd - conn->inStart;
+        if (conn->inStart) {
+            if (len) memmove(conn->inBuffer, conn->inBuffer + conn->inStart, len);
+            conn->inCursor -= conn->inStart;
+            conn->inEnd = len;
+            conn->inStart = 0;
+        }
         char *newbuf;
-        if (!(newbuf = realloc(s->conn->inBuffer, s->inBufSize))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
-        s->conn->inBuffer = newbuf;
-        s->conn->inBufSize = s->inBufSize;
+        int newsize = ngx_max(s->inBufSize, len);
+        if (!(newbuf = realloc(conn->inBuffer, newsize))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!realloc"); return NGX_HTTP_BAD_GATEWAY; }
+        conn->inBuffer = newbuf;
+        conn->inBufSize = newsize;
     }
     return rc;
 }
