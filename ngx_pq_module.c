@@ -1380,7 +1380,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             continue;
         }
         if (str[i].len >= sizeof("output=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"output=", sizeof("output=") - 1)) {
-            if (str[i].data[sizeof("output=") - 1] == '$' && query->type & (ngx_pq_type_upstream|ngx_pq_type_location)) {
+            if (str[i].data[sizeof("output=") - 1] == '$' && query->type & (ngx_pq_type_upstream|ngx_pq_type_location) && !(query->type & ngx_pq_type_prepare)) {
                 ngx_str_t name = str[i];
                 name.data += sizeof("output=") - 1 + 1;
                 name.len -= sizeof("output=") - 1 + 1;
