@@ -810,7 +810,7 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         ngx_str_t host = uscf->host;
         for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
 found:
-        while (host.len--) if (host.data[host.len] == ':') break;
+        for (ngx_uint_t n = host.len; n; ) { n--; if (host.data[n] == ':') { host.len = n; break; } }
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     }
     ngx_str_t host = *pc->name;
