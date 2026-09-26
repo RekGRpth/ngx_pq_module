@@ -495,6 +495,15 @@ destroy:
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQpipelineSync");
     }
 #endif
+    if (rc == NGX_OK) {
+        ngx_connection_t *c = s->connection;
+        c->read->active = 1;
+        switch (PQflush(s->conn)) {
+            case 0: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQflush == 0"); c->write->active = 0; break;
+            case 1: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQflush == 1"); c->write->active = 1; break;
+            case -1: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "PQflush == -1"); rc = NGX_ERROR; break;
+        }
+    }
     return rc;
 }
 static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t type) {
@@ -695,8 +704,8 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQexitPipelineMode");
     }
 #endif
-    if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (s->count) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "s->count = %i", s->count); return NGX_HTTP_BAD_GATEWAY; }
+    if (rc == NGX_OK) rc = ngx_pq_notify(s);
     if (d) {
         if (!ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_queue_empty"); return NGX_HTTP_BAD_GATEWAY; }
         if (rc == NGX_OK && d->type & ngx_pq_type_upstream) return ngx_pq_queries(s, d, ngx_pq_type_location);
