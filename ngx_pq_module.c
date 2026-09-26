@@ -427,7 +427,7 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
         }
     }
     for (int row = 0; row < PQntuples(res); row++, d->row++) {
-        if (row > 0 || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
+        if (d->row > 0 || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
             if (PQgetisnull(res, row, col)) {
