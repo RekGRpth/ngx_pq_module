@@ -316,7 +316,7 @@ static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     char *buffer = NULL;
     int len;
     ngx_int_t rc = NGX_OK;
-    switch ((len = PQgetCopyData(s->conn, &buffer, 0))) {
+    switch ((len = PQgetCopyData(s->conn, &buffer, 1))) {
         case 0: break;
         case -1: break;
         case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
