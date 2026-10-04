@@ -1449,3 +1449,24 @@ GET /
 --- response_body eval
 "a\n1\nb\n3"
 --- timeout: 10
+
+=== TEST 51:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        add_header v $v always;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 as a, 2 as b union all select 3, 4" output=value;
+        pq_query "select 'x' as a, 'y' as b" output=$v;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+v: xy
+--- response_body eval
+"12\n34"
+--- timeout: 10

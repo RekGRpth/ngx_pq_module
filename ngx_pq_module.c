@@ -504,7 +504,7 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
         qq->not_first = 1;
         if (ngx_pq_written(s, d, query)) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR; /* separate from an earlier query's output in the same place */
         for (int col = 0; col < PQnfields(res); col++) {
-            if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
+            if (col > 0 && query->delimiter) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR; /* none set (value, binary, $variable): columns are joined as is, not by a NUL byte */
             const u_char *data = (const u_char *)PQfname(res, col);
             if (ngx_pq_output_field(s, d, query, data, ngx_strlen(data)) != NGX_OK) return NGX_ERROR;
         }
@@ -513,7 +513,7 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
         if (qq->not_first_row || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         qq->not_first_row = 1;
         for (int col = 0; col < PQnfields(res); col++) {
-            if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
+            if (col > 0 && query->delimiter) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR; /* none set (value, binary, $variable): columns are joined as is, not by a NUL byte */
             if (PQgetisnull(res, row, col)) {
                 if (query->null.len) if (ngx_pq_output(s, d, query, query->null.data, query->null.len) != NGX_OK) return NGX_ERROR;
             } else {
