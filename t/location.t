@@ -1101,3 +1101,25 @@ GET /
 canceling statement due to user request
 --- no_error_log
 [alert]
+
+
+=== TEST 33:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "do $$ begin perform pg_sleep(2); exception when query_canceled then perform pg_terminate_backend(pg_backend_pid()); end $$";
+    }
+--- request
+GET /
+--- abort
+--- timeout: 0.5
+--- wait: 1
+--- ignore_response
+--- error_log
+ngx_pq_drain_close
+--- no_error_log
+[alert]

@@ -785,7 +785,7 @@ done:;
     } else if (!s->keepalive) {
         ngx_destroy_pool(c->pool);
         ngx_close_connection(c);
-        return rc;
+        return NGX_DONE; /* s and c are gone */
     }
     if (s->keepalive && s->conn->inBufSize > s->inBufSize) {
         ngx_log_error(NGX_LOG_WARN, c->log, 0, "inBufSize %i > %i", s->conn->inBufSize, s->inBufSize);
@@ -946,6 +946,13 @@ term:
     return rc;
 }
 
+/* a connection draining the results of a cancelled request belongs to nobody: its saved handlers are the finished request's upstream ones, so close it ourselves */
+static void ngx_pq_drain_close(ngx_connection_t *c, ngx_event_t *ev) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
+    if (ev->timedout) ngx_log_error(NGX_LOG_ERR, c->log, NGX_ETIMEDOUT, "pq drain of a cancelled request timed out");
+    ngx_destroy_pool(c->pool);
+    ngx_close_connection(c);
+}
 static void ngx_pq_read_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
@@ -954,9 +961,10 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout) {
             if (s->timeout) ngx_add_timer(c->read, s->timeout);
             ngx_int_t rc = ngx_pq_result(s, NULL);
-            if (rc == NGX_OK || rc == NGX_AGAIN) return;
+            if (rc == NGX_OK || rc == NGX_AGAIN || rc == NGX_DONE) return;
         }
-        return s->read(ev);
+        if (s->keepalive) return s->read(ev); /* the keepalive module's close handler */
+        return ngx_pq_drain_close(c, ev);
     }
 }
 static void ngx_pq_write_handler(ngx_event_t *ev) {
@@ -964,7 +972,9 @@ static void ngx_pq_write_handler(ngx_event_t *ev) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = cln->data;
-        return s->write(ev);
+        if (s->keepalive) return s->write(ev);
+        if (!ev->timedout && !ev->error && PQflush(s->conn) != -1) return; /* nothing else to do while draining: results come with read events */
+        return ngx_pq_drain_close(c, ev);
     }
 }
 
@@ -1026,7 +1036,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
         }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
         if (s->conn) {
-            ngx_log_t *log = pc->log;
+            ngx_log_t *log = ngx_cycle->log; /* the connection outlives the request: pc->log is the client connection's, freed with it */
             ngx_http_request_t *r = d->request;
             ngx_http_upstream_t *u = r->upstream;
             ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
@@ -1092,7 +1102,7 @@ cont:;
 #endif
     }
     if (pc->connection) return;
-    ngx_log_t *log = pc->log;
+    ngx_log_t *log = ngx_cycle->log; /* the connection outlives the request: pc->log is the client connection's, freed with it */
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
