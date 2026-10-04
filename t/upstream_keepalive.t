@@ -1090,3 +1090,31 @@ Content-Type: text/plain
 --- response_body_like eval
 ["^\\d+\$", "^(?!1\$)\\d+\$"]
 --- timeout: 10
+
+=== TEST 24:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+    }
+    location =/slow {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "do $$ begin perform pg_sleep(2); exception when query_canceled then perform pg_sleep(2); end $$";
+    }
+--- request eval
+["GET /", "GET /slow", "GET /"]
+--- abort
+--- timeout: 0.5
+--- ignore_response
+--- no_error_log
+another command is already in progress

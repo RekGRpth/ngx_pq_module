@@ -1140,3 +1140,21 @@ GET /
 --- response_body chomp
 1
 --- timeout: 10
+
+=== TEST 35:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        set $pg nonexistent;
+        pq_option user=postgres;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 500
+--- error_log
+no port in upstream "nonexistent"
+--- timeout: 10

@@ -1237,9 +1237,10 @@ static ngx_int_t ngx_pq_create_request(ngx_http_request_t *r) {
 static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
     ngx_http_upstream_t *u = r->upstream;
-    u->keepalive = !u->headers_in.connection_close;
     u->request_body_sent = 1;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (!d) return; /* finalized before ngx_pq_peer_init ran, e.g. unknown upstream name */
+    u->keepalive = !u->headers_in.connection_close && ngx_queue_empty(&d->queue); /* don't cache a connection whose queries are still running (client abort, timeout): it is cancelled and drained instead */
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
