@@ -1256,3 +1256,20 @@ pqlog - - 42
 --- no_error_log
 pqlog 0 UNKNOWN
 --- timeout: 10
+
+=== TEST 41:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select E'a\\tb' as x, E'l1\\nl2' as y, E'back\\\\slash' as z, E'\\\\N' as l, null::text as n" output=plain;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"x\ty\tz\tl\tn\na\\tb\tl1\\nl2\tback\\\\slash\t\\\\N\t\\N"
+--- timeout: 10

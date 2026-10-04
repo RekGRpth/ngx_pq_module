@@ -431,6 +431,27 @@ static ngx_flag_t ngx_pq_quote_needed(ngx_pq_query_t *query, const u_char *data,
     return 0;
 }
 static ngx_int_t ngx_pq_output_field(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_t *query, const u_char *data, size_t len) {
+    if (query->output == ngx_pq_output_plain) { /* escape like COPY ... TO in text format: otherwise a delimiter, newline or backslash in a value breaks the row, and a literal \N reads as NULL */
+        const u_char *p = data;
+        for (size_t k = 0; k < len; k++) {
+            u_char e;
+            switch (data[k]) {
+                case '\\': e = '\\'; break;
+                case '\b': e = 'b'; break;
+                case '\f': e = 'f'; break;
+                case '\n': e = 'n'; break;
+                case '\r': e = 'r'; break;
+                case '\t': e = 't'; break;
+                case '\v': e = 'v'; break;
+                default: if (data[k] != query->delimiter) continue; e = data[k]; break;
+            }
+            u_char escaped[] = { '\\', e };
+            if (ngx_pq_output(s, d, query, p, &data[k] - p) != NGX_OK) return NGX_ERROR;
+            if (ngx_pq_output(s, d, query, escaped, sizeof(escaped)) != NGX_OK) return NGX_ERROR;
+            p = &data[k + 1];
+        }
+        return ngx_pq_output(s, d, query, p, data + len - p);
+    }
     ngx_flag_t quoted = ngx_pq_quote_needed(query, data, len);
     if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
     if (quoted && query->escape) for (size_t k = 0; k < len; k++) {
