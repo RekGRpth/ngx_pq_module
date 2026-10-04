@@ -1009,7 +1009,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_srv_conf_t *uscf = r->upstream->conf->upstream;
     ngx_pq_connect_t *connect = uscf->srv_conf ? &((ngx_pq_srv_conf_t *)ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module))->connect : &plcf->connect;
-    plcf->upstream.connect_timeout = connect->timeout; /* ngx_http_upstream_connect arms it for the whole query, for a cached connection too, not only when ngx_pq_peer_open runs */
+    plcf->upstream.connect_timeout = connect->timeout; /* ngx_http_upstream_connect arms it for a cached connection too, not only when ngx_pq_peer_open runs; ngx_pq_event_handler drops it once connected */
     ngx_int_t rc;
     switch ((rc = d->peer.get(pc, d->peer.data))) {
         case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
@@ -1021,7 +1021,8 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
         ngx_pq_save_t *s = d->save = cln->data;
         if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_DECLINED; }
-        return ngx_pq_queries(s, d, ngx_pq_type_location);
+        if ((rc = ngx_pq_queries(s, d, ngx_pq_type_location)) == NGX_AGAIN) { ngx_post_event(c->write, &ngx_posted_events); } /* ngx_http_upstream_connect arms connect_timeout once we return, but the connection is already up: let ngx_pq_event_handler drop it */
+        return rc;
     }
     ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
     return NGX_BUSY;
@@ -1200,6 +1201,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "CONNECTION_OK");
             if (c->read->timedout || c->write->timedout) return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
+            if (c->write->timer_set) ngx_del_timer(c->write); /* connected: connect_timeout doesn't limit how long queries run */
             rc = ngx_pq_result(s, d);
             goto ret;
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQstatus = %i", PQstatus(s->conn)); break;

@@ -1118,3 +1118,24 @@ Content-Type: text/plain
 --- ignore_response
 --- no_error_log
 another command is already in progress
+
+=== TEST 25:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres connect_timeout=1s;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select pg_sleep($1)" $arg_s::701 output=value;
+    }
+--- request eval
+["GET /?s=0", "GET /?s=2"]
+--- error_code eval
+[200, 200]
+--- timeout: 10
