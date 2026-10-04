@@ -91,6 +91,10 @@ location =/postgres {
     pq_option user=user dbname=dbname application_name=application_name; # set user, dbname and application_name
     pq_pass unix:/run/postgresql:5432; # unix socket is in /run/postgresql directory and port is 5432
 }
+# or
+location =/postgres {
+    pq_pass unix:/run/postgresql; # unix socket is in /run/postgresql directory and port is libpq default (5432)
+}
 ```
 In upstream also may use nginx keepalive module:
 ```nginx
@@ -127,11 +131,11 @@ upstream postgres {
 ```
 pq_pass
 -------------
-* Syntax: **pq_pass** *host*:*port* | unix:/*socket*:*port* | *$upstream*
+* Syntax: **pq_pass** *host*:*port* | unix:/*socket*[:*port*] | *$upstream*
 * Default: --
 * Context: location, if in location
 
-Sets host (no nginx variables allowed) and port (no nginx variables allowed) or unix socket (no nginx variables allowed) and port (no nginx variables allowed) or upstream (nginx variables allowed):
+Sets host (no nginx variables allowed) and port (no nginx variables allowed) or unix socket (no nginx variables allowed) and optional port (no nginx variables allowed, libpq default port if omitted) or upstream (nginx variables allowed):
 ```nginx
 location =/postgres {
     pq_pass postgres:5432; # host is postgres and port is 5432

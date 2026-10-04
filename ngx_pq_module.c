@@ -878,24 +878,28 @@ found:
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     }
     ngx_str_t host = *pc->name;
-    ngx_str_t port = host;
-    while (host.len--) if (host.data[host.len] == ':') break;
-    port.data += host.len + 1;
-    port.len -= host.len + 1;
+    ngx_str_t port = ngx_null_string;
+    if (pc->sockaddr->sa_family == AF_UNIX) {
+        if (host.len < sizeof("unix:") - 1 || ngx_strncmp(host.data, (u_char *)"unix:", sizeof("unix:") - 1)) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "invalid unix socket address \"%V\", expected \"unix:/socket[:port]\"", pc->name); termPQExpBuffer(&conninfo); return NGX_ERROR; }
+        host.data += sizeof("unix:") - 1;
+        host.len -= sizeof("unix:") - 1;
+    }
+    if (!host.len || host.data[host.len - 1] != ']') for (ngx_uint_t n = host.len; n; ) { n--; if (host.data[n] == ':') { port.data = host.data + n + 1; port.len = host.len - n - 1; host.len = n; break; } } /* no ":port" suffix (e.g. "unix:/run/postgresql"): libpq uses its default port */
     if (pc->sockaddr->sa_family != AF_UNIX) {
         appendPQExpBufferStr(&conninfo, " hostaddr=");
-        if (host.data[0] == '[' && host.data[host.len - 1] == ']') {
+        if (host.len >= 2 && host.data[0] == '[' && host.data[host.len - 1] == ']') {
             host.data++;
             host.len -= 2;
         }
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     } else {
-        if (host.len < sizeof("unix:") - 1 || ngx_strncmp(host.data, (u_char *)"unix:", sizeof("unix:") - 1)) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "invalid unix socket address \"%V\", expected \"unix:/socket:port\"", pc->name); termPQExpBuffer(&conninfo); return NGX_ERROR; }
         appendPQExpBufferStr(&conninfo, " host=");
-        appendBinaryPQExpBuffer(&conninfo, (char *)host.data + (sizeof("unix:") - 1), host.len - (sizeof("unix:") - 1));
+        appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);
     }
-    appendPQExpBufferStr(&conninfo, " port=");
-    appendBinaryPQExpBuffer(&conninfo, (char *)port.data, port.len);
+    if (port.len) {
+        appendPQExpBufferStr(&conninfo, " port=");
+        appendBinaryPQExpBuffer(&conninfo, (char *)port.data, port.len);
+    }
     ngx_int_t rc = NGX_ERROR;
     if (PQExpBufferDataBroken(conninfo)) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "PQExpBufferDataBroken"); goto term; }
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", conninfo.data);

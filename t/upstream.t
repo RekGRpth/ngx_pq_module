@@ -915,3 +915,24 @@ Content-Type: text/plain
 --- response_body eval
 CORE::join("\x{0a}", 1..100000)
 --- timeout: 10
+
+=== TEST 19:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server unix:/run/postgresql;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 10

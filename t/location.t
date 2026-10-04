@@ -1123,3 +1123,20 @@ GET /
 ngx_pq_drain_close
 --- no_error_log
 [alert]
+
+=== TEST 34:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 10
