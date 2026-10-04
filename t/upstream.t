@@ -865,3 +865,53 @@ user: postgres
 --- response_body eval
 "ab,cde\x{0a}34,qwe\x{0a}89,\x{0a}"
 --- timeout: 60
+
+=== TEST 17:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        default_type text/plain;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "copy (select i from generate_series(1, 100000) i) to stdout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 588895
+Content-Type: text/plain
+--- response_body eval
+CORE::join("", map { "$_\x{0a}" } 1..100000)
+--- timeout: 10
+
+=== TEST 18:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        default_type text/plain;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select i from generate_series(1, 100000) i" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 588894
+Content-Type: text/plain
+--- response_body eval
+CORE::join("\x{0a}", 1..100000)
+--- timeout: 10

@@ -158,6 +158,7 @@ typedef struct {
     ngx_event_handler_pt write;
     ngx_flag_t keepalive;
     ngx_msec_t timeout;
+    ngx_int_t rc; /* outcome of the results processed so far: they may span several read events */
     ngx_queue_t queue;
     ngx_uint_t count;
     PGconn *conn;
@@ -325,7 +326,7 @@ static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     int len;
     ngx_int_t rc = NGX_OK;
     switch ((len = PQgetCopyData(s->conn, &buffer, 1))) {
-        case 0: break;
+        case 0: rc = NGX_AGAIN; break; /* row not fully received yet: wait for the next read event */
         case -1: break;
         case -2: ngx_pq_log_error(NGX_LOG_ERR, s->connection->log, 0, PQerrorMessage(s->conn), "PQgetCopyData == -2"); rc = NGX_HTTP_BAD_GATEWAY; break;
         default:
@@ -530,6 +531,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     if (c->read->timer_set) ngx_del_timer(c->read);
     if (c->write->timer_set) ngx_del_timer(c->write);
+    s->rc = NGX_OK;
     ngx_int_t rc = NGX_ERROR;
     PQExpBufferData name;
     PQExpBufferData sql;
@@ -698,23 +700,40 @@ again:
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
-    if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
-    ngx_int_t rc = NGX_OK;
-    for (PGresult *res; ((res = PQgetResult(s->conn)) || (res = PQgetResult(s->conn))) && PQstatus(s->conn) == CONNECTION_OK; PQclear(res)) switch (PQresultStatus(res)) {
-        case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
-        case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
-        case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
+    for (;;) { /* events are edge-triggered: keep reading until PQconsumeInput gets nothing new, i.e. the socket is drained */
+        int avail = s->conn->inEnd - s->conn->inStart;
+        if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
+        ngx_flag_t consumed = s->conn->inEnd - s->conn->inStart > avail;
+        for (ngx_uint_t nulls = 0; !PQisBusy(s->conn); ) { /* PQgetResult blocks the worker while PQisBusy */
+            PGresult *res;
+            if (!(res = PQgetResult(s->conn))) { if (nulls++) goto done; continue; } /* one NULL ends a pipelined query's results, two in a row end them all */
+            nulls = 0;
+            if (PQstatus(s->conn) != CONNECTION_OK) { PQclear(res); goto done; }
+            ngx_int_t rc = s->rc;
+            switch (PQresultStatus(res)) {
+                case PGRES_COMMAND_OK: rc = ngx_pq_res_command_ok(s, d, res); break;
+                case PGRES_COPY_OUT: rc = ngx_pq_res_copy_out(s, d); break;
+                case PGRES_FATAL_ERROR: rc = ngx_pq_res_fatal_error(s, d, res); break;
 #ifdef LIBPQ_HAS_PIPELINING
-        case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); break;
+                case PGRES_PIPELINE_SYNC: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_PIPELINE_SYNC"); break;
 #endif
-        case PGRES_TUPLES_OK:
+                case PGRES_TUPLES_OK:
 #ifdef LIBPQ_HAS_CHUNK_MODE
-        case PGRES_TUPLES_CHUNK:
+                case PGRES_TUPLES_CHUNK:
 #endif
-            rc = ngx_pq_res_tuples(s, d, res);
-            break;
-        default: rc = ngx_pq_res_default(s, d, res); break;
+                    rc = ngx_pq_res_tuples(s, d, res);
+                    break;
+                default: rc = ngx_pq_res_default(s, d, res); break;
+            }
+            PQclear(res);
+            if (rc == NGX_AGAIN) break; /* COPY row not fully received yet */
+            s->rc = rc;
+        }
+        if (!consumed) return NGX_AGAIN;
     }
+done:;
+    ngx_int_t rc = s->rc;
+    s->rc = NGX_OK;
 #ifdef LIBPQ_HAS_PIPELINING
     if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
         if (PQstatus(s->conn) == CONNECTION_OK && !PQexitPipelineMode(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQexitPipelineMode"); return NGX_DECLINED; }
@@ -898,7 +917,8 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         ngx_pq_save_t *s = cln->data;
         if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout) {
             if (s->timeout) ngx_add_timer(c->read, s->timeout);
-            if (ngx_pq_result(s, NULL) == NGX_OK) return;
+            ngx_int_t rc = ngx_pq_result(s, NULL);
+            if (rc == NGX_OK || rc == NGX_AGAIN) return;
         }
         return s->read(ev);
     }

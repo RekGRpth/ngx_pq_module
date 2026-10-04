@@ -966,3 +966,51 @@ Content-Type: text/plain
 --- response_body chomp
 5
 --- timeout: 60
+
+=== TEST 19:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        default_type text/plain;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "copy (select i from generate_series(1, 100000) i) to stdout" output=value;
+    }
+--- request eval
+["GET /", "GET /"]
+--- error_code eval
+[200, 200]
+--- response_body eval
+[CORE::join("", map { "$_\x{0a}" } 1..100000), CORE::join("", map { "$_\x{0a}" } 1..100000)]
+--- timeout: 10
+
+=== TEST 20:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        default_type text/plain;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select i from generate_series(1, 100000) i" output=value;
+    }
+--- request eval
+["GET /", "GET /"]
+--- error_code eval
+[200, 200]
+--- response_body eval
+[CORE::join("\x{0a}", 1..100000), CORE::join("\x{0a}", 1..100000)]
+--- timeout: 10

@@ -989,3 +989,72 @@ GET /
 --- must_die
 --- error_log
 empty "delimiter" value
+
+=== TEST 28:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/plain;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "copy (select i from generate_series(1, 100000) i) to stdout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 588895
+Content-Type: text/plain
+--- response_body eval
+CORE::join("", map { "$_\x{0a}" } 1..100000)
+--- timeout: 10
+
+=== TEST 29:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/plain;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select i from generate_series(1, 100000) i" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Content-Length: 588894
+Content-Type: text/plain
+--- response_body eval
+CORE::join("\x{0a}", 1..100000)
+--- timeout: 10
+
+=== TEST 30:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        mirror /fast;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select repeat('x', 100000) union all select pg_sleep(2)::text";
+    }
+    location =/fast {
+        internal;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select pg_sleep(0.5)";
+    }
+--- request
+GET /
+--- error_code: 200
+--- grep_error_log eval
+qr/PGRES_TUPLES_OK and SELECT \d+/
+--- grep_error_log_out
+PGRES_TUPLES_OK and SELECT 1
+PGRES_TUPLES_OK and SELECT 2
+--- timeout: 10
