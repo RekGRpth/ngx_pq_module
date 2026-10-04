@@ -1514,3 +1514,55 @@ channel = Bar
 --- response_body eval
 ["1", "1"]
 --- timeout: 10
+
+=== TEST 54:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select length($1)" $request_body output=value;
+    }
+--- request eval
+"POST /\n" . ("a" x 20000)
+--- error_code: 200
+--- response_body chomp
+20000
+--- timeout: 10
+
+=== TEST 55:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select length($1)" $request_body output=value;
+    }
+--- request eval
+"POST /\n" . ("a" x 200000)
+--- error_code: 200
+--- response_body chomp
+200000
+--- timeout: 10
+
+=== TEST 56:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_request_buffering off;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1";
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+unknown directive "pq_request_buffering"
