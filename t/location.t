@@ -1235,3 +1235,24 @@ GET /
 --- response_body_like eval
 ["502 Bad Gateway", "^0\$"]
 --- timeout: 10
+
+=== TEST 40:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    log_format pq 'pqlog $pq_pid $pq_transaction_status $out';
+--- config
+    location =/ {
+        access_log logs/error.log pq;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 42" output=$out;
+    }
+--- request
+GET /
+--- error_code: 200
+--- error_log
+pqlog - - 42
+--- no_error_log
+pqlog 0 UNKNOWN
+--- timeout: 10

@@ -1010,6 +1010,7 @@ ret:
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
+    d->save = NULL; /* a previous try's connection is gone: if this try fails before getting one, ngx_pq_peer_free and $pq_* must not touch its freed s */
     ngx_http_request_t *r = d->request;
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_srv_conf_t *uscf = r->upstream->conf->upstream;
@@ -1112,7 +1113,7 @@ cont:;
         }
 #endif
     }
-    if (pc->connection) return;
+    if (pc->connection) { d->save = NULL; return; } /* the upstream closes it and destroys its pool, s included, right after: keep $pq_* from reading freed memory in the log phase */
     ngx_log_t *log = ngx_cycle->log; /* the connection outlives the request: pc->log is the client connection's, freed with it */
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
@@ -1132,6 +1133,7 @@ cont:;
     c->pool->log = log;
     c->read->log = log;
     c->write->log = log;
+    if (!s->keepalive) d->save = NULL; /* draining after a cancel: closed as soon as the results are in, maybe before the log phase */
 }
 
 static ngx_int_t ngx_pq_peer_init_data(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf, ngx_pq_data_t *d) {
@@ -1290,11 +1292,10 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     if (!d) return NGX_OK;
     ngx_pq_save_t *s = d->save;
-    if (!s) return NGX_OK;
     ngx_int_t index = data;
     ngx_array_t *variables;
     ngx_pq_variable_t *variable;
-    variables = &d->variables;
+    variables = &d->variables; /* location ones live in r->pool: available after the connection is gone too */
     variable = variables->elts;
     v->len = 0;
     for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == index) {
@@ -1307,6 +1308,7 @@ static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_var
         v->valid = 1;
         return NGX_OK;
     }
+    if (!s) return NGX_OK; /* upstream ones live with the connection */
     variables = &s->variables;
     variable = variables->elts;
     for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == index) {
