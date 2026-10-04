@@ -454,9 +454,14 @@ static ngx_int_t ngx_pq_output_field(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_
     }
     ngx_flag_t quoted = ngx_pq_quote_needed(query, data, len);
     if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
-    if (quoted && query->escape) for (size_t k = 0; k < len; k++) {
-        if ((data[k] == query->quote || data[k] == query->escape) && ngx_pq_output(s, d, query, &query->escape, sizeof(query->escape)) != NGX_OK) return NGX_ERROR;
-        if (ngx_pq_output(s, d, query, &data[k], sizeof(data[k])) != NGX_OK) return NGX_ERROR;
+    if (quoted && query->escape) { /* write unescaped runs in one piece, not a buffer per byte */
+        const u_char *p = data;
+        for (size_t k = 0; k < len; k++) if (data[k] == query->quote || data[k] == query->escape) {
+            if (ngx_pq_output(s, d, query, p, &data[k] - p) != NGX_OK) return NGX_ERROR;
+            if (ngx_pq_output(s, d, query, &query->escape, sizeof(query->escape)) != NGX_OK) return NGX_ERROR;
+            p = &data[k]; /* the escaped character itself starts the next run */
+        }
+        if (ngx_pq_output(s, d, query, p, data + len - p) != NGX_OK) return NGX_ERROR;
     } else if (ngx_pq_output(s, d, query, data, len) != NGX_OK) return NGX_ERROR;
     if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
     return NGX_OK;

@@ -1290,3 +1290,21 @@ GET /
 --- response_body chomp
 postgres
 --- timeout: 10
+
+=== TEST 43:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/csv;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select '\"a\"\"b\"' as x, repeat('a,', 10000) as y, '\"' as z" output=csv;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"x,y,z\x{0a}\"\"\"a\"\"\"\"b\"\"\",\"" . ("a," x 10000) . "\",\"\"\"\""
+--- timeout: 10
