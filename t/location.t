@@ -1058,3 +1058,25 @@ qr/PGRES_TUPLES_OK and SELECT \d+/
 PGRES_TUPLES_OK and SELECT 1
 PGRES_TUPLES_OK and SELECT 2
 --- timeout: 10
+
+=== TEST 31:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "do $$ begin raise notice 'stale notice'; end $$";
+        pq_query "select 1/0";
+    }
+--- log_level: error
+--- request
+GET /
+--- error_code: 502
+--- error_log eval
+qr/PGRES_FATAL_ERROR.*, client: 127\.0\.0\.1, server: localhost, request: "GET \/ HTTP\/1\.1"/
+--- no_error_log
+stale notice
+[alert]
+--- timeout: 10

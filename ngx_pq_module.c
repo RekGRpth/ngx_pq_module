@@ -26,6 +26,8 @@ typedef struct {
     (log)->data = &original; \
     (log)->handler = ngx_pq_log_error_handler; \
     ngx_log_error(level, log, err, fmt, ##__VA_ARGS__); \
+    (log)->data = original.data; /* the handler restores these only if it runs: not when level is filtered out or is NGX_LOG_DEBUG */ \
+    (log)->handler = original.handler; \
 } while (0)
 
 ngx_module_t ngx_pq_module;
