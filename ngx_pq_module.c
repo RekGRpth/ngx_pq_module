@@ -637,8 +637,10 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                 }
                 /* only pq_query knows the argument's oid locally (pq_execute's was fixed by the matching pq_prepare); binary format is only safe here for oids whose wire format is the raw string bytes */
                 Oid oid = (query[i].type & ngx_pq_type_query) ? qq->paramTypes[j] : 1 /* anything not in the safe set below */;
-                /* unspecified (0) is not binary-safe: the server infers the type (int, float8, ...) and would parse the raw bytes as its binary form; only a NUL byte, which no text value may contain, still goes binary so the server rejects it loudly instead of libpq truncating it */
-                if (oid == 25 /* TEXTOID */ || oid == 1043 /* VARCHAROID */ || (oid == 0 && memchr(argument[j].value.str.data, '\0', argument[j].value.str.len))) {
+                /* no text value may contain a NUL byte: libpq would truncate it in text format, and in binary format the server would read the bytes as e.g. an int; location arguments are rejected with 400 before connecting (ngx_pq_body_handler), this catches upstream ones */
+                if (memchr(argument[j].value.str.data, '\0', argument[j].value.str.len)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "argument %ui contains a NUL byte", j + 1); goto ret; }
+                /* unspecified (0) is not binary-safe: the server infers the type (int, float8, ...) and would parse the raw bytes as its binary form */
+                if (oid == 25 /* TEXTOID */ || oid == 1043 /* VARCHAROID */) {
                     if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
                     ngx_memcpy((u_char *)qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len);
                     qq->paramLengths[j] = argument[j].value.str.len;
@@ -1325,6 +1327,7 @@ static ngx_int_t ngx_pq_reinit_request(ngx_http_request_t *r) {
 static ngx_int_t ngx_pq_variable_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not produced yet, e.g. read before its query ran (ngx_pq_body_handler checks arguments before connecting): don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1366,6 +1369,7 @@ typedef char *(*pq_func)(const PGconn *conn);
 static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1383,6 +1387,7 @@ static ngx_int_t ngx_pq_conn_get_handler(ngx_http_request_t *r, ngx_http_variabl
 static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1398,6 +1403,7 @@ static ngx_int_t ngx_pq_error_get_handler(ngx_http_request_t *r, ngx_http_variab
 static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1414,6 +1420,7 @@ static ngx_int_t ngx_pq_parameter_status_get_handler(ngx_http_request_t *r, ngx_
 static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1430,6 +1437,7 @@ static ngx_int_t ngx_pq_pid_get_handler(ngx_http_request_t *r, ngx_http_variable
 static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1446,6 +1454,7 @@ static ngx_int_t ngx_pq_ssl_attribute_get_handler(ngx_http_request_t *r, ngx_htt
 static ngx_int_t ngx_pq_transaction_status_get_handler(ngx_http_request_t *r, ngx_http_variable_value_t *v, uintptr_t data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     v->not_found = 1;
+    v->no_cacheable = 1; /* not available yet, e.g. before connecting: don't let nginx cache the miss */
     ngx_http_upstream_t *u = r->upstream;
     if (!u) return NGX_OK;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
@@ -1513,6 +1522,26 @@ static ngx_http_variable_t ngx_pq_variables[] = {
     ngx_http_null_variable
 };
 
+static ngx_int_t ngx_pq_arguments_nul(ngx_http_request_t *r, ngx_array_t *queries) {
+    ngx_pq_query_t *query = queries->elts;
+    for (ngx_uint_t i = 0; i < queries->nelts; i++) if (query[i].type & (ngx_pq_type_query|ngx_pq_type_execute)) {
+        ngx_pq_argument_t *argument = query[i].arguments.elts;
+        for (ngx_uint_t j = 0; j < query[i].arguments.nelts; j++) {
+            ngx_str_t value = argument[j].value.str;
+            if (argument[j].value.complex.value.data && ngx_http_complex_value(r, &argument[j].value.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
+            if (memchr(value.data, '\0', value.len)) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "argument %ui contains a NUL byte", j + 1); return NGX_DECLINED; }
+        }
+    }
+    return NGX_OK;
+}
+static void ngx_pq_body_handler(ngx_http_request_t *r) { /* reject arguments no text value can hold before connecting: a client error, not an upstream failure to retry */
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    switch (ngx_pq_arguments_nul(r, &plcf->queries)) {
+        case NGX_OK: ngx_http_upstream_init(r); return;
+        case NGX_DECLINED: ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST); return;
+        default: ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR); return;
+    }
+}
 static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_int_t rc;
@@ -1532,7 +1561,7 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     u->reinit_request = ngx_pq_reinit_request;
     u->buffering = u->conf->buffering;
     if (!u->conf->request_buffering && u->conf->pass_request_body && !r->headers_in.chunked) r->request_body_no_buffering = 1;
-    if ((rc = ngx_http_read_client_request_body(r, ngx_http_upstream_init)) >= NGX_HTTP_SPECIAL_RESPONSE) return rc;
+    if ((rc = ngx_http_read_client_request_body(r, ngx_pq_body_handler)) >= NGX_HTTP_SPECIAL_RESPONSE) return rc;
     return NGX_DONE;
 }
 

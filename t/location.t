@@ -970,9 +970,9 @@ NOTICE:  hello from tagged doblock
     }
 --- request eval
 "POST /\nab\x{00}cd"
---- error_code: 502
+--- error_code: 400
 --- error_log
-invalid byte sequence for encoding "UTF8": 0x00
+argument 1 contains a NUL byte
 --- timeout: 60
 
 === TEST 27:
@@ -1324,4 +1324,41 @@ GET /
 --- error_code: 502
 --- error_log
 host=localhost hostaddr=
+--- timeout: 10
+
+=== TEST 45:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select $1::int + 1" $request_body output=value;
+    }
+--- request eval
+"POST /\n\x{00}\x{00}\x{00}\x{05}"
+--- error_code: 400
+--- error_log
+argument 1 contains a NUL byte
+--- timeout: 10
+
+=== TEST 46:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_prepare st "select length($1)" 25;
+        pq_execute st $request_body output=value;
+    }
+--- request eval
+"POST /\nab\x{00}cd"
+--- error_code: 400
+--- error_log
+argument 1 contains a NUL byte
 --- timeout: 10
