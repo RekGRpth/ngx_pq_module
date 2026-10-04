@@ -1034,6 +1034,14 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_pq_data_t *d = data;
     d->save = NULL; /* a previous try's connection is gone: if this try fails before getting one, ngx_pq_peer_free and $pq_* must not touch its freed s */
     ngx_http_request_t *r = d->request;
+    /* every try (pq_next_upstream) starts from scratch: drop what a previous try cut off part way already produced; ngx_pq_reinit_request doesn't run for retries */
+    r->upstream->out_bufs = NULL;
+    d->last = NULL;
+    d->variables.nelts = 0;
+    d->empty = 0;
+    d->row = 0;
+    d->tuples = 0;
+    ngx_memzero(&d->error, sizeof(d->error));
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
     ngx_http_upstream_srv_conf_t *uscf = r->upstream->conf->upstream;
     ngx_pq_connect_t *connect = uscf->srv_conf ? &((ngx_pq_srv_conf_t *)ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module))->connect : &plcf->connect;

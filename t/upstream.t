@@ -961,3 +961,33 @@ GET /
 --- response_body chomp
 1
 --- timeout: 10
+
+=== TEST 21:
+--- main_config
+    load_module /etc/nginx/modules/ngx_stream_module.so;
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+    stream {
+        server {
+            listen 127.0.0.1:1985;
+            proxy_timeout 1s;
+            proxy_pass unix:/run/postgresql/.s.PGSQL.5432;
+        }
+    }
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server 127.0.0.1:1985;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select repeat('x', 100000) as x union all select 'end' from pg_sleep(2)" output=value chunkSize=1;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+("x" x 100000) . "\nend"
+--- timeout: 10
