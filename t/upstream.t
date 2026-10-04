@@ -1012,3 +1012,24 @@ GET /
 --- response_body chomp
 1
 --- timeout: 10
+
+=== TEST 23:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        pq_query "select 1";
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        pq_empty 404;
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1 where false" output=value;
+    }
+--- request
+GET /
+--- error_code: 404
+--- timeout: 10

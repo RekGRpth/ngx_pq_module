@@ -491,13 +491,15 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
     }
     if (PQresultStatus(res) == PGRES_TUPLES_OK && s->count) { s->count--; return NGX_OK; }
     if (!d) return NGX_OK;
-    if (!d->tuples) { d->tuples = 1; d->empty = PQntuples(res) == 0; } else if (PQntuples(res)) d->empty = 0;
     if (ngx_queue_empty(&d->queue)) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "ngx_queue_empty"); return NGX_ERROR; }
     ngx_queue_t *q = ngx_queue_head(&d->queue);
     if (PQresultStatus(res) == PGRES_TUPLES_OK) { ngx_queue_remove(q); }
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
+    if (query->type & ngx_pq_type_location) { /* pq_empty is about the location's queries: an upstream one runs only on a new connection */
+        if (!d->tuples) { d->tuples = 1; d->empty = PQntuples(res) == 0; } else if (PQntuples(res)) d->empty = 0;
+    }
     if (query->header && !qq->not_first) {
         qq->not_first = 1;
         if (ngx_pq_written(s, d, query)) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR; /* separate from an earlier query's output in the same place */
