@@ -1033,3 +1033,28 @@ GET /
 GET /
 --- error_code: 404
 --- timeout: 10
+
+=== TEST 24:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+        if ($arg_x) {
+            set $y 1;
+        }
+    }
+--- request eval
+["GET /", "GET /?x=1"]
+--- error_code eval
+[200, 200]
+--- response_body eval
+["1", "1"]
+--- timeout: 10

@@ -1934,6 +1934,10 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
 static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_pq_loc_conf_t *prev = parent;
     ngx_pq_loc_conf_t *conf = child;
+    /* an "if" block inside a pq location runs the parent's handler with its own configuration: it must see the parent's queries, options and pq_pass; a nested location only runs the handler with a pq_pass of its own */
+    if (!conf->queries.elts) conf->queries = prev->queries;
+    if (!conf->connect.options.elts) conf->connect = prev->connect;
+    if (!conf->upstream.upstream && !conf->complex.value.data) conf->complex = prev->complex; /* pq_pass $var: only when this level has no pq_pass of its own */
     if (!conf->upstream.upstream) conf->upstream = prev->upstream;
     ngx_conf_merge_bitmask_value(conf->upstream.next_upstream, prev->upstream.next_upstream, NGX_CONF_BITMASK_SET|NGX_HTTP_UPSTREAM_FT_ERROR|NGX_HTTP_UPSTREAM_FT_TIMEOUT);
     ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
