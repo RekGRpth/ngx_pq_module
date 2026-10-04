@@ -1210,3 +1210,28 @@ GET /
 --- response_body eval
 "x,y,z,e,n\x{0a}\"a,b\",\"say \"\"hi\"\"\",\"l1\x{0a}l2\",\"\","
 --- timeout: 10
+
+=== TEST 39:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/bad {
+        pq_option user=postgres application_name=unsent;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 from $http_x_tbl";
+    }
+    location =/count {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select count(*) from pg_stat_activity where application_name = 'unsent'" output=value;
+    }
+--- request eval
+["GET /bad", "GET /count"]
+--- more_headers eval
+["X-Tbl: t\xe2", ""]
+--- error_code eval
+[502, 200]
+--- response_body_like eval
+["502 Bad Gateway", "^0\$"]
+--- timeout: 10

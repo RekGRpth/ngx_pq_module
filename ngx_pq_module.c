@@ -180,6 +180,7 @@ typedef struct {
     ngx_array_t variables;
     ngx_chain_t *last;
     ngx_flag_t empty;
+    ngx_flag_t failed; /* ngx_pq_queries failed: the connection is in an unknown state and must not be reused */
     ngx_flag_t inner; /* ngx_pq_peer_init_outer is initializing the balancers below us */
     ngx_flag_t tuples;
     ngx_http_request_t *request;
@@ -561,6 +562,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
     if (c->write->timer_set) ngx_del_timer(c->write);
     s->rc = NGX_OK;
     ngx_int_t rc = NGX_ERROR;
+    d->failed = 0;
     PQExpBufferData name;
     PQExpBufferData sql;
     initPQExpBuffer(&name);
@@ -689,6 +691,10 @@ ret:
     termPQExpBuffer(&name);
     termPQExpBuffer(&sql);
     d->row = 0;
+    if (rc != NGX_AGAIN) { /* the queued queries were never sent (or flushed): no results will come, so don't cancel and drain them but have the connection closed */
+        ngx_queue_init(&d->queue);
+        d->failed = 1;
+    }
     return rc;
 }
 
@@ -1242,7 +1248,7 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     u->request_body_sent = 1;
     ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
     if (!d) return; /* finalized before ngx_pq_peer_init ran, e.g. unknown upstream name */
-    u->keepalive = !u->headers_in.connection_close && ngx_queue_empty(&d->queue); /* don't cache a connection whose queries are still running (client abort, timeout): it is cancelled and drained instead */
+    u->keepalive = !u->headers_in.connection_close && !d->failed && ngx_queue_empty(&d->queue); /* don't cache a connection whose queries are still running (client abort, timeout): it is cancelled and drained instead */
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
