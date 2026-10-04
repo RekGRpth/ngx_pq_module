@@ -1080,3 +1080,24 @@ qr/PGRES_FATAL_ERROR.*, client: 127\.0\.0\.1, server: localhost, request: "GET \
 stale notice
 [alert]
 --- timeout: 10
+
+=== TEST 32:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select pg_sleep(5)";
+    }
+--- request
+GET /
+--- abort
+--- timeout: 0.5
+--- wait: 1
+--- ignore_response
+--- error_log
+canceling statement due to user request
+--- no_error_log
+[alert]

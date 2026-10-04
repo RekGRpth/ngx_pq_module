@@ -726,7 +726,7 @@ static ngx_int_t ngx_pq_fail_poll(ngx_pq_fail_t *f) {
 again:
     switch (PQcancelPoll(f->conn)) {
         case PGRES_POLLING_ACTIVE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_ACTIVE"); break;
-        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQcancelErrorMessage(f->conn), "PGRES_POLLING_FAILED"); break;
+        case PGRES_POLLING_FAILED: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQcancelErrorMessage(f->conn), "PGRES_POLLING_FAILED"); return NGX_DECLINED;
         case PGRES_POLLING_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_OK"); return NGX_OK;
         case PGRES_POLLING_READING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_READING"); c->read->active = 1; c->write->active = 0; break;
         case PGRES_POLLING_WRITING: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PGRES_POLLING_WRITING"); if (started) goto again; c->read->active = 0; c->write->active = 1; break;
@@ -973,6 +973,7 @@ static void ngx_pq_fail_handler(ngx_event_t *ev) {
     ngx_connection_t *c = ev->data;
     ngx_pq_fail_t *f = c->data;
     ngx_int_t rc = NGX_AGAIN;
+    if (ev->timedout) { ngx_log_error(NGX_LOG_ERR, c->log, NGX_ETIMEDOUT, "cancel request timed out"); rc = NGX_DECLINED; goto ret; }
     switch (PQcancelStatus(f->conn)) {
         case CONNECTION_BAD: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQcancelErrorMessage(f->conn), "CONNECTION_BAD"); rc = NGX_DECLINED; goto ret;
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "CONNECTION_OK"); rc = NGX_OK; goto ret;
@@ -980,10 +981,9 @@ static void ngx_pq_fail_handler(ngx_event_t *ev) {
     }
     rc = ngx_pq_fail_poll(f);
 ret:
-    if (rc == NGX_OK) {
-        ngx_destroy_pool(c->pool);
-        ngx_close_connection(c);
-    }
+    if (rc == NGX_AGAIN) return;
+    ngx_destroy_pool(c->pool); /* done either way: on failure too, or the connection, its pool and PGcancelConn leak forever */
+    ngx_close_connection(c);
 }
 #endif
 
@@ -1030,9 +1030,12 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             ngx_http_request_t *r = d->request;
             ngx_http_upstream_t *u = r->upstream;
             ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+            ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+            ngx_pq_connect_t *connect = &plcf->connect;
             if (uscf->srv_conf) {
                 ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
                 if (pscf && pscf->log) log = pscf->log;
+                connect = &pscf->connect;
             }
             PGcancelConn *conn = PQcancelCreate(s->conn);
             if (PQcancelStatus(conn) == CONNECTION_BAD) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQcancelErrorMessage(conn), "CONNECTION_BAD"); goto finish; }
@@ -1065,6 +1068,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
                 if (ngx_add_event(c->read, NGX_READ_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
                 if (ngx_add_event(c->write, NGX_WRITE_EVENT, ngx_event_flags & NGX_USE_CLEAR_EVENT ? NGX_CLEAR_EVENT : NGX_LEVEL_EVENT) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, pc->log, 0, "ngx_add_event != NGX_OK"); goto destroy; }
             }
+            ngx_add_timer(c->read, connect->timeout ? connect->timeout : 60000); /* a cancel request the server never answers must not hang forever */
             f->conn = conn;
             f->connection = c;
             pc->connection = NULL;
