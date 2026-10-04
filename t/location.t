@@ -1470,3 +1470,26 @@ v: xy
 --- response_body eval
 "12\n34"
 --- timeout: 10
+
+=== TEST 52:
+--- main_config
+    load_module /etc/nginx/modules/ngx_http_push_stream_module.so;
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    push_stream_shared_memory_size 32m;
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "listen Foo";
+        pq_query "LISTEN \"Bar\" ;";
+    }
+--- request
+GET /
+--- error_code: 200
+--- grep_error_log eval
+qr/channel = \S+/
+--- grep_error_log_out
+channel = foo
+channel = Bar
+--- timeout: 10

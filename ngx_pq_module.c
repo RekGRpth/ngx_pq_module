@@ -309,6 +309,29 @@ static void ngx_pq_prepared_remove(ngx_pq_save_t *s, ngx_str_t *name) {
     s->prepared.nelts--;
 }
 
+#define ngx_pq_space(ch) ((ch) == ' ' || (ch) == '\t' || (ch) == '\n' || (ch) == '\r')
+static ngx_int_t ngx_pq_listen_channel(ngx_pool_t *pool, ngx_str_t *sql, ngx_str_t *channel) { /* the channel of a literal "LISTEN name" as the server sees it: an unquoted name folded to lower case, a quoted one as is with "" unescaped */
+    u_char *p = sql->data, *e = sql->data + sql->len;
+    while (p < e && ngx_pq_space(*p)) p++;
+    if (e - p <= (ssize_t)(sizeof("listen") - 1) || ngx_strncasecmp(p, (u_char *)"listen", sizeof("listen") - 1) || !ngx_pq_space(p[sizeof("listen") - 1])) return NGX_DECLINED;
+    p += sizeof("listen") - 1;
+    while (p < e && ngx_pq_space(*p)) p++;
+    u_char *b, *o;
+    if (!(b = o = ngx_pnalloc(pool, e - p + 1))) return NGX_ERROR;
+    if (p < e && *p == '"') {
+        for (p++; p < e; p++) {
+            if (*p == '"') { if (p + 1 < e && p[1] == '"') { *o++ = *p++; continue; } break; }
+            *o++ = *p;
+        }
+        if (p == e) return NGX_DECLINED;
+        p++;
+    } else for (; p < e && !ngx_pq_space(*p) && *p != ';'; p++) *o++ = ngx_tolower(*p);
+    while (p < e && (ngx_pq_space(*p) || *p == ';')) p++;
+    if (p != e || o == b) return NGX_DECLINED;
+    channel->data = b;
+    channel->len = o - b;
+    return NGX_OK;
+}
 static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
     size_t len = 0;
@@ -324,16 +347,21 @@ static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGres
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
     if (query->type & ngx_pq_type_prepare && ngx_pq_prepared_add(s, &qq->name) != NGX_OK) return NGX_ERROR;
-    if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
+    if (ngx_http_push_stream_delete_channel_my && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
         ngx_pq_command_t *command = query->commands.elts;
-        command = &command[1];
-        ngx_str_t channel = command->str;
-        if (command->index) {
+        ngx_str_t channel;
+        if (query->commands.nelts == 2 && command[1].index) { /* "listen $channel": sent quoted, so the server sees the variable's value as is */
             ngx_http_variable_value_t *v;
-            if (!(v = ngx_http_get_indexed_variable(d->request, command->index - 1))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
+            if (!(v = ngx_http_get_indexed_variable(d->request, command[1].index - 1))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_http_get_indexed_variable"); return NGX_ERROR; }
             channel.data = v->data;
             channel.len = v->len;
-        }
+        } else if (query->commands.nelts == 1) { /* literal "listen name" */
+            switch (ngx_pq_listen_channel(d->request->pool, &command[0].str, &channel)) {
+                case NGX_OK: break;
+                case NGX_DECLINED: return NGX_OK; /* not a form we can tell the channel of */
+                default: ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pq_listen_channel"); return NGX_ERROR;
+            }
+        } else return NGX_OK;
         ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &channel);
         ngx_flag_t tracked = 0;
         for (ngx_queue_t *q = ngx_queue_head(&s->queue); q != ngx_queue_sentinel(&s->queue); q = ngx_queue_next(q)) {
