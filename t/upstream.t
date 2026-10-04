@@ -936,3 +936,28 @@ GET /
 --- response_body chomp
 1
 --- timeout: 10
+
+=== TEST 20:
+--- main_config
+    load_module /etc/nginx/modules/ngx_http_push_stream_module.so;
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    push_stream_shared_memory_size 32m;
+    upstream pg {
+        pq_option user=postgres;
+        pq_query "listen ch";
+        pq_query "notify ch";
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 10

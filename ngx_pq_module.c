@@ -696,7 +696,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         }
     }
 #ifdef LIBPQ_HAS_PIPELINING
-    if (queries->nelts > 1 && PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) {
+    if (PQpipelineStatus(s->conn) == PQ_PIPELINE_ON) { /* not only for several queries: ngx_pq_notify may have left the pipeline on, and without a Sync the server never sends a lone query's result */
         if (!PQpipelineSync(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQpipelineSync"); goto ret; }
         ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQpipelineSync");
     }
