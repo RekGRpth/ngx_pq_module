@@ -904,9 +904,11 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     }
     if (pc->sockaddr->sa_family != AF_UNIX) {
         appendPQExpBufferStr(&conninfo, " host=");
-        ngx_http_upstream_server_t *us = uscf->servers->elts;
         ngx_str_t host = uscf->host;
-        for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
+        if (uscf->servers) { /* nginx gives an implicit upstream (pq_pass host:port) no servers when the name resolves to several addresses, e.g. localhost */
+            ngx_http_upstream_server_t *us = uscf->servers->elts;
+            for (ngx_uint_t j = 0; j < uscf->servers->nelts; j++) if (us[j].name.data) for (ngx_uint_t k = 0; k < us[j].naddrs; k++) if (pc->sockaddr == us[j].addrs[k].sockaddr) { host = us[j].name; goto found; }
+        }
 found:
         for (ngx_uint_t n = host.len; n; ) { n--; if (host.data[n] == ':') { host.len = n; break; } }
         appendBinaryPQExpBuffer(&conninfo, (char *)host.data, host.len);

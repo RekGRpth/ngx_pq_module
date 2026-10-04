@@ -1308,3 +1308,20 @@ GET /
 --- response_body eval
 "x,y,z\x{0a}\"\"\"a\"\"\"\"b\"\"\",\"" . ("a," x 10000) . "\",\"\"\"\""
 --- timeout: 10
+
+=== TEST 44:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass localhost:1;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 502
+--- error_log
+host=localhost hostaddr=
+--- timeout: 10
