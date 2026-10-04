@@ -1273,3 +1273,20 @@ GET /
 --- response_body eval
 "x\ty\tz\tl\tn\na\\tb\tl1\\nl2\tback\\\\slash\t\\\\N\t\\N"
 --- timeout: 10
+
+=== TEST 42:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+    env PGUSER=postgres;
+--- http_config
+--- config
+    location =/ {
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select current_user" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+postgres
+--- timeout: 10

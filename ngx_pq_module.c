@@ -1660,15 +1660,18 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     query->type = cmd->offset;
     return ngx_pq_argument_output_loc_conf(cf, query);
 }
+static void ngx_pq_connect_init(ngx_pq_connect_t *connect) { /* defaults also without pq_option: a zero connect_timeout would time out every connection at once */
+    connect->errors = PQERRORS_DEFAULT;
+    connect->show_context = PQSHOW_CONTEXT_ERRORS;
+    connect->timeout = 60 * 1000;
+}
 static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connect) {
     if (connect->options.elts) return "is duplicate";
     ngx_str_t *option;
     if (ngx_array_init(&connect->options, cf->pool, cf->args->nelts - 1, sizeof(*option)) != NGX_OK) return "ngx_array_init != NGX_OK";
     ngx_str_t application_name = ngx_null_string;
     ngx_str_t *str = cf->args->elts;
-    connect->errors = PQERRORS_DEFAULT;
-    connect->show_context = PQSHOW_CONTEXT_ERRORS;
-    connect->timeout = 60 * 1000;
+    ngx_pq_connect_init(connect);
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         if (str[i].len > sizeof("host=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"host=", sizeof("host=") - 1)) return "\"host\" option not allowed!";
         if (str[i].len > sizeof("hostaddr=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"hostaddr=", sizeof("hostaddr=") - 1)) return "\"hostaddr\" option not allowed!";
@@ -1819,11 +1822,13 @@ static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
     ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
     conf->buffer_size = NGX_CONF_UNSET_SIZE;
+    ngx_pq_connect_init(&conf->connect);
     return conf;
 }
 static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     ngx_pq_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
+    ngx_pq_connect_init(&conf->connect);
     conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
     conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
     conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
