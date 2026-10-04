@@ -113,6 +113,7 @@ typedef struct {
     ngx_log_t *log;
     ngx_pq_connect_t connect;
     size_t buffer_size;
+    ngx_http_upstream_init_peer_pt outer; /* init of a balancer that wrapped itself around ours, see ngx_pq_postconfiguration */
 } ngx_pq_srv_conf_t;
 
 typedef struct {
@@ -123,6 +124,7 @@ typedef struct {
     ngx_flag_t not_first_row;
     ngx_pq_query_t *query;
     ngx_queue_t queue;
+    ngx_str_t name; /* evaluated statement name of pq_prepare/pq_execute */
     Oid *paramTypes;
 } ngx_pq_query_queue_t;
 
@@ -154,6 +156,7 @@ typedef struct {
 
 typedef struct {
     int inBufSize;
+    ngx_array_t prepared; /* names of statements prepared on this connection */
     ngx_array_t variables;
     ngx_connection_t *connection;
     ngx_event_handler_pt read;
@@ -177,6 +180,7 @@ typedef struct {
     ngx_array_t variables;
     ngx_chain_t *last;
     ngx_flag_t empty;
+    ngx_flag_t inner; /* ngx_pq_peer_init_outer is initializing the balancers below us */
     ngx_flag_t tuples;
     ngx_http_request_t *request;
     ngx_int_t row;
@@ -281,6 +285,29 @@ static ngx_int_t ngx_pq_copy_error(ngx_pq_data_t *d, PGresult *res, int fieldcod
     return NGX_OK;
 }
 
+static ngx_str_t *ngx_pq_prepared_find(ngx_pq_save_t *s, const u_char *data, size_t len) {
+    ngx_str_t *name = s->prepared.elts;
+    for (ngx_uint_t i = 0; i < s->prepared.nelts; i++) if (name[i].len == len && !ngx_strncmp(name[i].data, data, len)) return &name[i];
+    return NULL;
+}
+static ngx_int_t ngx_pq_prepared_add(ngx_pq_save_t *s, ngx_str_t *name) {
+    ngx_connection_t *c = s->connection;
+    if (ngx_pq_prepared_find(s, name->data, name->len)) return NGX_OK;
+    ngx_str_t *str;
+    if (!s->prepared.elts && ngx_array_init(&s->prepared, c->pool, 1, sizeof(*str)) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_array_init != NGX_OK"); return NGX_ERROR; }
+    if (!(str = ngx_array_push(&s->prepared))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
+    if (!(str->data = ngx_pstrdup(c->pool, name))) { s->prepared.nelts--; ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pstrdup"); return NGX_ERROR; }
+    str->len = name->len;
+    return NGX_OK;
+}
+static void ngx_pq_prepared_remove(ngx_pq_save_t *s, ngx_str_t *name) {
+    ngx_str_t *str = ngx_pq_prepared_find(s, name->data, name->len);
+    if (!str) return;
+    ngx_str_t *last = (ngx_str_t *)s->prepared.elts + s->prepared.nelts - 1;
+    *str = *last; /* order doesn't matter: move the last element into the hole */
+    s->prepared.nelts--;
+}
+
 static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
     size_t len = 0;
@@ -295,6 +322,7 @@ static ngx_int_t ngx_pq_res_command_ok(ngx_pq_save_t *s, ngx_pq_data_t *d, PGres
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
+    if (query->type & ngx_pq_type_prepare && ngx_pq_prepared_add(s, &qq->name) != NGX_OK) return NGX_ERROR;
     if (ngx_http_push_stream_delete_channel_my && query->commands.nelts == 2 && len == sizeof("LISTEN") - 1 && !ngx_strncasecmp((u_char *)value, (u_char *)"LISTEN", sizeof("LISTEN") - 1)) {
         ngx_pq_command_t *command = query->commands.elts;
         command = &command[1];
@@ -371,10 +399,9 @@ static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGre
     ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
     ngx_pq_query_t *query = qq->query;
     d->type = query->type;
-    if (query->type & ngx_pq_type_prepare) {
-        char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
-        if (sqlstate && !ngx_strcmp(sqlstate, "42P05")) return NGX_OK; /* prepared statement already exists: harmless when reusing a pooled/keepalive backend connection */
-    }
+    char *sqlstate = PQresultErrorField(res, PG_DIAG_SQLSTATE);
+    if (query->type & ngx_pq_type_prepare && sqlstate && !ngx_strcmp(sqlstate, "42P05")) return ngx_pq_prepared_add(s, &qq->name); /* prepared statement already exists: harmless when reusing a pooled/keepalive backend connection */
+    if (query->type & ngx_pq_type_execute && sqlstate && !ngx_strcmp(sqlstate, "26000")) ngx_pq_prepared_remove(s, &qq->name); /* deallocated behind our back (DEALLOCATE/DISCARD): prepare it again next time */
     ngx_memzero(&d->error, sizeof(d->error));
     if (ngx_pq_copy_error(d, res, PG_DIAG_SEVERITY, offsetof(ngx_pq_error_t, severity)) != NGX_OK) return NGX_ERROR;
     if (ngx_pq_copy_error(d, res, PG_DIAG_SEVERITY_NONLOCALIZED, offsetof(ngx_pq_error_t, severity_nonlocalized)) != NGX_OK) return NGX_ERROR;
@@ -622,7 +649,15 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                 appendBinaryPQExpBuffer(&name, (char *)value.data, value.len);
             } else appendBinaryPQExpBuffer(&name, (char *)query[i].name.str.data, query[i].name.str.len);
             if (PQExpBufferDataBroken(name)) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "PQExpBufferDataBroken"); goto ret; }
+            qq->name.len = name.len;
+            if (!(qq->name.data = ngx_pnalloc(r->pool, name.len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_pnalloc"); goto ret; }
+            ngx_memcpy(qq->name.data, name.data, name.len);
             if (query[i].type & ngx_pq_type_prepare) {
+                if (queries->nelts > 1 && ngx_pq_prepared_find(s, qq->name.data, qq->name.len)) { /* already prepared on this connection: re-preparing would fail with 42P05 and abort the rest of the pipeline; a lone pq_prepare isn't pipelined, so its 42P05 is simply ignored */
+                    ngx_queue_remove(&qq->queue);
+                    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "skip PQsendPrepare('%s')", name.data);
+                    continue;
+                }
                 if (!PQsendPrepare(s->conn, name.data, sql.data, query[i].arguments.nelts, qq->paramTypes)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsendPrepare"); rc = NGX_DECLINED; goto ret; }
                 ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsendPrepare('%s', '%s')", name.data, sql.data);
             } else if (query[i].type & ngx_pq_type_execute) {
@@ -826,7 +861,6 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
         buffer_size = pscf->buffer_size;
         connect = &pscf->connect;
     }
-    plcf->upstream.connect_timeout = connect->timeout;
     PQExpBufferData conninfo;
     initPQExpBuffer(&conninfo);
     ngx_str_t *option = connect->options.elts;
@@ -956,6 +990,11 @@ ret:
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
+    ngx_http_request_t *r = d->request;
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    ngx_http_upstream_srv_conf_t *uscf = r->upstream->conf->upstream;
+    ngx_pq_connect_t *connect = uscf->srv_conf ? &((ngx_pq_srv_conf_t *)ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module))->connect : &plcf->connect;
+    plcf->upstream.connect_timeout = connect->timeout; /* ngx_http_upstream_connect arms it for the whole query, for a cached connection too, not only when ngx_pq_peer_open runs */
     ngx_int_t rc;
     switch ((rc = d->peer.get(pc, d->peer.data))) {
         case NGX_DONE: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_DONE"); break;
@@ -1070,17 +1109,7 @@ cont:;
     c->write->log = log;
 }
 
-static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
-    ngx_pq_data_t *d;
-    if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-    ngx_queue_init(&d->queue);
-    if (uscf->srv_conf) {
-        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
-        if (pscf->peer.init(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer.init != NGX_OK"); return NGX_ERROR; }
-    } else {
-        if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
-    }
+static ngx_int_t ngx_pq_peer_init_data(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf, ngx_pq_data_t *d) {
     ngx_http_upstream_t *u = r->upstream;
     d->peer = u->peer;
     d->request = r;
@@ -1090,6 +1119,36 @@ static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_c
     u->peer.get = ngx_pq_peer_get;
     ngx_http_set_ctx(r, d, ngx_pq_module);
     return NGX_OK;
+}
+static ngx_int_t ngx_pq_peer_init(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "srv_conf = %s", uscf->srv_conf ? "true" : "false");
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    if (d && d->inner) { /* called as the original init of a balancer wrapped around us: only init the next one, ngx_pq_peer_init_outer puts us on top */
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        return pscf->peer.init(r, uscf);
+    }
+    if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    ngx_queue_init(&d->queue);
+    if (uscf->srv_conf) {
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        if (pscf->peer.init(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "peer.init != NGX_OK"); return NGX_ERROR; }
+    } else {
+        if (ngx_http_upstream_init_round_robin_peer(r, uscf) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_upstream_init_round_robin_peer != NGX_OK"); return NGX_ERROR; }
+    }
+    return ngx_pq_peer_init_data(r, uscf, d);
+}
+static ngx_int_t ngx_pq_peer_init_outer(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+    ngx_pq_data_t *d;
+    if (!(d = ngx_pcalloc(r->pool, sizeof(*d)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    ngx_queue_init(&d->queue);
+    d->inner = 1;
+    ngx_http_set_ctx(r, d, ngx_pq_module);
+    ngx_int_t rc = pscf->outer(r, uscf);
+    d->inner = 0;
+    if (rc != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "outer != NGX_OK"); return NGX_ERROR; }
+    return ngx_pq_peer_init_data(r, uscf, d);
 }
 
 static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv_conf_t *uscf) {
@@ -1691,6 +1750,20 @@ static ngx_int_t ngx_pq_preconfiguration(ngx_conf_t *cf) {
     }
     return NGX_OK;
 }
+static ngx_int_t ngx_pq_postconfiguration(ngx_conf_t *cf) {
+    ngx_http_upstream_main_conf_t *umcf = ngx_http_conf_get_module_main_conf(cf, ngx_http_upstream_module);
+    ngx_http_upstream_srv_conf_t **uscfp = umcf->upstreams.elts;
+    for (ngx_uint_t i = 0; i < umcf->upstreams.nelts; i++) {
+        ngx_http_upstream_srv_conf_t *uscf = uscfp[i];
+        if (!uscf->srv_conf || uscf->peer.init == ngx_pq_peer_init) continue;
+        ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
+        if (!pscf->peer.init) continue; /* not a pq upstream: ngx_pq_peer_init_upstream didn't run for it */
+        /* a balancer wrapped itself around ours after init_upstream (newer nginx's keepalive does so in its init_main_conf): then its get runs first and calls ours as the "balancer", which opens a new connection before the cache is ever searched; put ours back on top */
+        pscf->outer = uscf->peer.init;
+        uscf->peer.init = ngx_pq_peer_init_outer;
+    }
+    return NGX_OK;
+}
 static void *ngx_pq_create_srv_conf(ngx_conf_t *cf) {
     ngx_pq_srv_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(*conf));
     if (!conf) return NULL;
@@ -1837,7 +1910,7 @@ static ngx_conf_enum_t ngx_pq_empty[] = {
 
 static ngx_http_module_t ngx_pq_ctx = {
     .preconfiguration = ngx_pq_preconfiguration,
-    .postconfiguration = NULL,
+    .postconfiguration = ngx_pq_postconfiguration,
     .create_main_conf = NULL,
     .init_main_conf = NULL,
     .create_srv_conf = ngx_pq_create_srv_conf,

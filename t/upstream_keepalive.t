@@ -1014,3 +1014,79 @@ Content-Type: text/plain
 --- response_body eval
 [CORE::join("\x{0a}", 1..100000), CORE::join("\x{0a}", 1..100000)]
 --- timeout: 10
+
+=== TEST 21:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_prepare query "select $1 + 1" 23;
+        pq_execute query $arg_a output=value;
+    }
+--- request eval
+["GET /?a=1", "GET /?a=2"]
+--- error_code eval
+[200, 200]
+--- response_body eval
+["2", "3"]
+--- timeout: 10
+
+=== TEST 22:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_prepare query "select $1 + 1" 23;
+        pq_execute query $arg_a output=value;
+    }
+    location =/dealloc {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "deallocate all";
+    }
+--- request eval
+["GET /?a=1", "GET /dealloc", "GET /?a=2", "GET /?a=3"]
+--- error_code eval
+[200, 200, 502, 200]
+--- response_body_like eval
+["^2\$", "^\$", ".*", "^4\$"]
+--- timeout: 10
+
+=== TEST 23:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select set_config('my.n', (coalesce(nullif(current_setting('my.n', true), ''), '0')::int + 1)::text, false)" output=value;
+    }
+--- request eval
+["GET /", "GET /"]
+--- error_code eval
+[200, 200]
+--- response_body_like eval
+["^\\d+\$", "^(?!1\$)\\d+\$"]
+--- timeout: 10
