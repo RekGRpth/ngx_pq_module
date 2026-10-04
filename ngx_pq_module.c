@@ -842,6 +842,7 @@ done:;
 static void ngx_pq_save_cln_handler(void *data) {
     ngx_pq_save_t *s = data;
     ngx_connection_t *c = s->connection;
+    if (!c) return; /* ngx_pq_peer_open failed (ngx_add_conn, ngx_add_event) before s was set up: it closes the connection and finishes the PGconn itself */
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%V", &c->addr_text);
     if (ngx_del_conn) {
         ngx_del_conn(c, NGX_CLOSE_EVENT);
