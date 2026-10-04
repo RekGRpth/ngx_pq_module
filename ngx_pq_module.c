@@ -610,7 +610,8 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                 }
                 /* only pq_query knows the argument's oid locally (pq_execute's was fixed by the matching pq_prepare); binary format is only safe here for oids whose wire format is the raw string bytes */
                 Oid oid = (query[i].type & ngx_pq_type_query) ? qq->paramTypes[j] : 1 /* anything not in the safe set below */;
-                if (oid == 0 /* unspecified */ || oid == 25 /* TEXTOID */ || oid == 1043 /* VARCHAROID */) {
+                /* unspecified (0) is not binary-safe: the server infers the type (int, float8, ...) and would parse the raw bytes as its binary form; only a NUL byte, which no text value may contain, still goes binary so the server rejects it loudly instead of libpq truncating it */
+                if (oid == 25 /* TEXTOID */ || oid == 1043 /* VARCHAROID */ || (oid == 0 && memchr(argument[j].value.str.data, '\0', argument[j].value.str.len))) {
                     if (!(qq->paramValues[j] = ngx_pnalloc(r->pool, argument[j].value.str.len))) { ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "!ngx_pnalloc"); goto ret; }
                     ngx_memcpy((u_char *)qq->paramValues[j], argument[j].value.str.data, argument[j].value.str.len);
                     qq->paramLengths[j] = argument[j].value.str.len;

@@ -1158,3 +1158,37 @@ GET /
 --- error_log
 no port in upstream "nonexistent"
 --- timeout: 10
+
+=== TEST 36:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select $1::int + 1" $arg_a output=value;
+    }
+--- request
+GET /?a=41
+--- error_code: 200
+--- response_body chomp
+42
+--- timeout: 10
+
+=== TEST 37:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select count(*) from generate_series(1, 10) i where i < $1" $arg_a output=value;
+    }
+--- request
+GET /?a=5
+--- error_code: 200
+--- response_body chomp
+4
+--- timeout: 10
