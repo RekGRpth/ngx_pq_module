@@ -768,9 +768,10 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         int avail = s->conn->inEnd - s->conn->inStart;
         if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
         ngx_flag_t consumed = s->conn->inEnd - s->conn->inStart > avail;
+        ngx_flag_t finished = 0;
         for (ngx_uint_t nulls = 0; !PQisBusy(s->conn); ) { /* PQgetResult blocks the worker while PQisBusy */
             PGresult *res;
-            if (!(res = PQgetResult(s->conn))) { if (nulls++) goto done; continue; } /* one NULL ends a pipelined query's results, two in a row end them all */
+            if (!(res = PQgetResult(s->conn))) { if (nulls++) { finished = 1; break; } continue; } /* one NULL ends a pipelined query's results, two in a row end them all */
             nulls = 0;
             if (PQstatus(s->conn) != CONNECTION_OK) { PQclear(res); goto done; }
             ngx_int_t rc = s->rc;
@@ -793,7 +794,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             if (rc == NGX_AGAIN) break; /* COPY row not fully received yet */
             s->rc = rc;
         }
-        if (!consumed) return NGX_AGAIN;
+        if (!consumed) { if (finished) goto done; return NGX_AGAIN; } /* finish only once the socket is drained: an EOF that came with the last data gets no event of its own */
     }
 done:;
     ngx_int_t rc = s->rc;
