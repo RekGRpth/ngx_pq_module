@@ -1974,7 +1974,7 @@ static char *ngx_pq_pass_loc_conf(ngx_conf_t *cf, ngx_command_t *cmd, void *conf
         return NGX_CONF_OK;
     }
     ngx_url_t url = {0};
-    if (!plcf->connect.options.elts) url.no_resolve = 1;
+    url.no_resolve = 1; /* as proxy_pass does: an upstream{} name must not be resolved, and a host name is resolved when the implicit upstream is initialized; depending on whether pq_option came first broke "pq_option ...; pq_pass upstream_name;" */
     url.url = str[1];
     if (!(plcf->upstream.upstream = ngx_http_upstream_add(cf, &url, 0))) return NGX_CONF_ERROR;
     ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;

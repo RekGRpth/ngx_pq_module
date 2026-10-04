@@ -991,3 +991,24 @@ GET /
 --- response_body eval
 ("x" x 100000) . "\nend"
 --- timeout: 10
+
+=== TEST 22:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass pg;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 10
