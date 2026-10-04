@@ -1083,7 +1083,7 @@ static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t s
             s->count++;
         }
 #ifdef LIBPQ_HAS_ASYNC_CANCEL
-        if (s->conn) {
+        if (s->conn && PQstatus(s->conn) == CONNECTION_OK) { /* a broken connection runs nothing to cancel, and the upstream closes it */
             ngx_log_t *log = ngx_cycle->log; /* the connection outlives the request: pc->log is the client connection's, freed with it */
             ngx_http_request_t *r = d->request;
             ngx_http_upstream_t *u = r->upstream;
@@ -1141,7 +1141,7 @@ cont:;
         }
 #else
         PGcancel *cancel;
-        if (s->conn && (cancel = PQgetCancel(s->conn))) {
+        if (s->conn && PQstatus(s->conn) == CONNECTION_OK && (cancel = PQgetCancel(s->conn))) {
             char errbuf[256];
             ngx_log_error(NGX_LOG_WARN, pc->log, 0, "PQcancel is deprecated and insecure! Use libpq version 17+");
             if (!PQcancel(cancel, errbuf, sizeof(errbuf))) ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, errbuf, "!PQcancel");
