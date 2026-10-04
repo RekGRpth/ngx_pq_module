@@ -423,6 +423,22 @@ static ngx_int_t ngx_pq_res_fatal_error(ngx_pq_save_t *s, ngx_pq_data_t *d, PGre
     if (ngx_pq_copy_error(d, res, PG_DIAG_SOURCE_FUNCTION, offsetof(ngx_pq_error_t, source_function)) != NGX_OK) return NGX_ERROR;
     return NGX_HTTP_BAD_GATEWAY;
 }
+static ngx_flag_t ngx_pq_quote_needed(ngx_pq_query_t *query, const u_char *data, size_t len) {
+    if (!query->quote) return 0;
+    if (query->string || !len) return 1; /* an empty string is quoted to tell it from NULL, as COPY ... CSV does */
+    for (size_t k = 0; k < len; k++) if (data[k] == query->delimiter || data[k] == query->quote || data[k] == query->escape || data[k] == '\r' || data[k] == '\n') return 1;
+    return 0;
+}
+static ngx_int_t ngx_pq_output_field(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_t *query, const u_char *data, size_t len) {
+    ngx_flag_t quoted = ngx_pq_quote_needed(query, data, len);
+    if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
+    if (quoted && query->escape) for (size_t k = 0; k < len; k++) {
+        if ((data[k] == query->quote || data[k] == query->escape) && ngx_pq_output(s, d, query, &query->escape, sizeof(query->escape)) != NGX_OK) return NGX_ERROR;
+        if (ngx_pq_output(s, d, query, &data[k], sizeof(data[k])) != NGX_OK) return NGX_ERROR;
+    } else if (ngx_pq_output(s, d, query, data, len) != NGX_OK) return NGX_ERROR;
+    if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
+    return NGX_OK;
+}
 static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) switch (PQresultStatus(res)) {
@@ -452,16 +468,8 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
         if (d->type & ngx_pq_type_location && d->row > 0) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
-            if (query->string && query->quote) if (ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
             const u_char *data = (const u_char *)PQfname(res, col);
-            ngx_uint_t len = ngx_strlen(data);
-            if (query->string && query->quote && query->escape) for (ngx_uint_t k = 0; k < len; k++) {
-                if (data[k] == query->quote) if (ngx_pq_output(s, d, query, &query->escape, sizeof(query->escape)) != NGX_OK) return NGX_ERROR;
-                if (ngx_pq_output(s, d, query, &data[k], sizeof(data[k])) != NGX_OK) return NGX_ERROR;
-            } else {
-                if (ngx_pq_output(s, d, query, (const u_char *)data, len) != NGX_OK) return NGX_ERROR;
-            }
-            if (query->string && query->quote) if (ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
+            if (ngx_pq_output_field(s, d, query, data, ngx_strlen(data)) != NGX_OK) return NGX_ERROR;
         }
     }
     for (int row = 0; row < PQntuples(res); row++, d->row++) {
@@ -472,16 +480,7 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
             if (PQgetisnull(res, row, col)) {
                 if (query->null.len) if (ngx_pq_output(s, d, query, query->null.data, query->null.len) != NGX_OK) return NGX_ERROR;
             } else {
-                if (query->string && query->quote) if (ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
-                const u_char *data = (const u_char *)PQgetvalue(res, row, col);
-                ngx_uint_t len = PQgetlength(res, row, col);
-                if (query->string && query->quote && query->escape) for (ngx_uint_t k = 0; k < len; k++) {
-                    if (data[k] == query->quote) if (ngx_pq_output(s, d, query, &query->escape, sizeof(query->escape)) != NGX_OK) return NGX_ERROR;
-                    if (ngx_pq_output(s, d, query, &data[k], sizeof(data[k])) != NGX_OK) return NGX_ERROR;
-                } else {
-                    if (ngx_pq_output(s, d, query, (const u_char *)data, len) != NGX_OK) return NGX_ERROR;
-                }
-                if (query->string && query->quote) if (ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
+                if (ngx_pq_output_field(s, d, query, (const u_char *)PQgetvalue(res, row, col), PQgetlength(res, row, col)) != NGX_OK) return NGX_ERROR;
             }
         }
     }

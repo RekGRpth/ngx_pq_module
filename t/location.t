@@ -1192,3 +1192,21 @@ GET /?a=5
 --- response_body chomp
 4
 --- timeout: 10
+
+=== TEST 38:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/csv;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 'a,b' as x, 'say \"hi\"' as y, E'l1\\nl2' as z, '' as e, null::text as n" output=csv;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"x,y,z,e,n\x{0a}\"a,b\",\"say \"\"hi\"\"\",\"l1\x{0a}l2\",\"\","
+--- timeout: 10
