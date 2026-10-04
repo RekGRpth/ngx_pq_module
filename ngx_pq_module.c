@@ -217,6 +217,8 @@ static u_char *ngx_pq_log_error_handler(ngx_log_t *log, u_char *buf, size_t len)
     return buf;
 }
 
+#define NGX_PQ_OUTPUT_BUFFER 16384
+#define NGX_PQ_VARIABLE_BUFFER 1024
 static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_t *query, const u_char *data, size_t len) {
     ngx_log_debug2(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "%*s", (int)len, data);
     if (!len) return NGX_OK;
@@ -244,33 +246,36 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
             if (!(variable = ngx_array_push(variables))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_array_push"); return NGX_ERROR; }
             ngx_memzero(variable, sizeof(*variable));
             variable->index = query->index;
-            if (!(cl = variable->cl = variable->last = ngx_alloc_chain_link(pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
-        } else {
-            variable = &variable[i];
-            cl = variable->last;
-            if (!(cl = cl->next = ngx_alloc_chain_link(pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+        } else variable = &variable[i];
+        if (!variable->last || (size_t)(variable->last->buf->end - variable->last->buf->last) < len) { /* append to the last buffer while it has room, not a buffer per value, delimiter and newline */
+            if (!(cl = ngx_alloc_chain_link(pool))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
+            cl->next = NULL;
+            if (!(cl->buf = ngx_create_temp_buf(pool, ngx_max(len, NGX_PQ_VARIABLE_BUFFER)))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
+            if (variable->last) variable->last->next = cl; else variable->cl = cl;
             variable->last = cl;
         }
-        cl->next = NULL;
-        if (!(cl->buf = ngx_create_temp_buf(pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_create_temp_buf"); return NGX_ERROR; }
-        cl->buf->last = ngx_copy(cl->buf->last, data, len);
+        variable->last->buf->last = ngx_copy(variable->last->buf->last, data, len);
     } else if (query->output) {
         ngx_connection_t *c = r->connection;
         ngx_http_upstream_t *u = r->upstream;
-        ngx_chain_t *cl;
-        if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
-        if (d->last) d->last->next = cl; else u->out_bufs = cl;
-        d->last = cl;
-        ngx_buf_t *b = cl->buf;
-        if (b->start) ngx_pfree(r->pool, b->start);
-        if (!(b->start = ngx_palloc(r->pool, len))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_palloc"); return NGX_ERROR; }
-        b->end = b->start + len;
-        b->flush = 1;
-        b->last = ngx_copy(b->start, data, len);
-        b->memory = 1;
-        b->pos = b->start;
-        b->tag = u->output.tag;
-        b->temporary = 1;
+        ngx_buf_t *b = d->last ? d->last->buf : NULL;
+        if (!b || (size_t)(b->end - b->last) < len) { /* append to the last buffer while it has room, not a buffer per value, delimiter and newline */
+            ngx_chain_t *cl;
+            if (!(cl = ngx_chain_get_free_buf(r->pool, &u->free_bufs))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_chain_get_free_buf"); return NGX_ERROR; }
+            if (d->last) d->last->next = cl; else u->out_bufs = cl;
+            d->last = cl;
+            b = cl->buf;
+            if (b->start) ngx_pfree(r->pool, b->start);
+            size_t size = ngx_max(len, NGX_PQ_OUTPUT_BUFFER);
+            if (!(b->start = ngx_palloc(r->pool, size))) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "!ngx_palloc"); return NGX_ERROR; }
+            b->end = b->start + size;
+            b->flush = 1;
+            b->last = b->pos = b->start;
+            b->memory = 1;
+            b->tag = u->output.tag;
+            b->temporary = 1;
+        }
+        b->last = ngx_copy(b->last, data, len);
     }
     return NGX_OK;
 }
