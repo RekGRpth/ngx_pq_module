@@ -1410,3 +1410,42 @@ PGRES_TUPLES_CHUNK
 PGRES_TUPLES_CHUNK
 PGRES_TUPLES_CHUNK
 --- timeout: 10
+
+=== TEST 49:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/csv;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1";
+        pq_query "select 2 as b" output=csv;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"b\n2"
+--- timeout: 10
+
+=== TEST 50:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type text/csv;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 as a" output=csv;
+        pq_query "select 2" output=$v;
+        pq_query "select 3 as b" output=csv;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"a\n1\nb\n3"
+--- timeout: 10

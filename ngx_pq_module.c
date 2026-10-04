@@ -185,7 +185,6 @@ typedef struct {
     ngx_flag_t inner; /* ngx_pq_peer_init_outer is initializing the balancers below us */
     ngx_flag_t tuples;
     ngx_http_request_t *request;
-    ngx_int_t row;
     ngx_peer_connection_t peer;
     ngx_pq_error_t error;
     ngx_pq_save_t *save;
@@ -368,7 +367,6 @@ static ngx_int_t ngx_pq_res_copy_out(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             ngx_pq_query_queue_t *qq = ngx_queue_data(q, ngx_pq_query_queue_t, queue);
             ngx_pq_query_t *query = qq->query;
             d->type = query->type;
-            d->row++;
             if (ngx_pq_output(s, d, query, (const u_char *)buffer, len) != NGX_OK) rc = NGX_ERROR;
             break;
     }
@@ -467,6 +465,15 @@ static ngx_int_t ngx_pq_output_field(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_
     if (quoted && ngx_pq_output(s, d, query, &query->quote, sizeof(query->quote)) != NGX_OK) return NGX_ERROR;
     return NGX_OK;
 }
+static ngx_flag_t ngx_pq_written(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_t *query) { /* whether this query's destination, the body or its output variable, already holds some output */
+    if (query->index) {
+        ngx_array_t *variables = query->type & ngx_pq_type_upstream ? &s->variables : &d->variables;
+        ngx_pq_variable_t *variable = variables->elts;
+        for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == query->index) return 1;
+        return 0;
+    }
+    return query->output && d->last;
+}
 static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
     if ((value = PQcmdStatus(res)) && ngx_strlen(value)) switch (PQresultStatus(res)) {
@@ -493,14 +500,14 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
     d->type = query->type;
     if (query->header && !qq->not_first) {
         qq->not_first = 1;
-        if (d->type & ngx_pq_type_location && d->row > 0) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
+        if (ngx_pq_written(s, d, query)) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR; /* separate from an earlier query's output in the same place */
         for (int col = 0; col < PQnfields(res); col++) {
             if (col > 0) if (ngx_pq_output(s, d, query, &query->delimiter, sizeof(query->delimiter)) != NGX_OK) return NGX_ERROR;
             const u_char *data = (const u_char *)PQfname(res, col);
             if (ngx_pq_output_field(s, d, query, data, ngx_strlen(data)) != NGX_OK) return NGX_ERROR;
         }
     }
-    for (int row = 0; row < PQntuples(res); row++, d->row++) {
+    for (int row = 0; row < PQntuples(res); row++) {
         if (qq->not_first_row || query->header) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR;
         qq->not_first_row = 1;
         for (int col = 0; col < PQnfields(res); col++) {
@@ -724,7 +731,6 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
 ret:
     termPQExpBuffer(&name);
     termPQExpBuffer(&sql);
-    d->row = 0;
     if (rc != NGX_AGAIN) { /* the queued queries were never sent (or flushed): no results will come, so don't cancel and drain them but have the connection closed */
         ngx_queue_init(&d->queue);
         d->failed = 1;
@@ -1061,7 +1067,6 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     d->last = NULL;
     d->variables.nelts = 0;
     d->empty = 0;
-    d->row = 0;
     d->tuples = 0;
     ngx_memzero(&d->error, sizeof(d->error));
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
