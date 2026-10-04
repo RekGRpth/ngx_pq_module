@@ -125,6 +125,7 @@ typedef struct {
     ngx_pq_query_t *query;
     ngx_queue_t queue;
     ngx_str_t name; /* evaluated statement name of pq_prepare/pq_execute */
+    ngx_flag_t chunked; /* PQsetChunkedRowsMode was tried for it */
     Oid *paramTypes;
 } ngx_pq_query_queue_t;
 
@@ -579,6 +580,17 @@ destroy:
     }
     return rc;
 }
+#ifdef LIBPQ_HAS_CHUNK_MODE
+/* PQsetChunkedRowsMode applies to the query at the head of libpq's queue, which in pipeline mode isn't the one just sent: set it for our queue's head (no stale queries ahead, s->count) once it gets there - right after sending it when nothing precedes it, otherwise when the previous query's results are done */
+static void ngx_pq_chunk(ngx_pq_save_t *s, ngx_pq_data_t *d) {
+    if (!d || s->count || ngx_queue_empty(&d->queue)) return;
+    ngx_pq_query_queue_t *qq = ngx_queue_data(ngx_queue_head(&d->queue), ngx_pq_query_queue_t, queue);
+    if (qq->query->chunkSize <= 0 || qq->chunked) return;
+    qq->chunked = 1;
+    if (!PQsetChunkedRowsMode(s->conn, qq->query->chunkSize)) { ngx_pq_log_error(NGX_LOG_WARN, s->connection->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode, the result comes unchunked"); return; }
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, s->connection->log, 0, "PQsetChunkedRowsMode(%i)", qq->query->chunkSize);
+}
+#endif
 static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t type) {
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
@@ -666,10 +678,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
             if (!PQsendQueryParams(s->conn, sql.data, query[i].arguments.nelts, qq->paramTypes, qq->paramValues, qq->paramLengths, qq->paramFormats, query[i].output == ngx_pq_output_binary)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsendQueryParams"); rc = NGX_DECLINED; goto ret; }
             ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsendQueryParams('%s')", sql.data);
 #ifdef LIBPQ_HAS_CHUNK_MODE
-            if (query[i].chunkSize > 0) {
-                if (!PQsetChunkedRowsMode(s->conn, query[i].chunkSize)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode"); rc = NGX_DECLINED; goto ret; }
-                ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsetChunkedRowsMode(%i)", query[i].chunkSize);
-            }
+            ngx_pq_chunk(s, d);
 #endif
         } else {
             resetPQExpBuffer(&name);
@@ -694,10 +703,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                 if (!PQsendQueryPrepared(s->conn, name.data, query[i].arguments.nelts, qq->paramValues, NULL, NULL, query[i].output == ngx_pq_output_binary)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsendQueryPrepared"); rc = NGX_DECLINED; goto ret; }
                 ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsendQueryPrepared('%s')", name.data);
 #ifdef LIBPQ_HAS_CHUNK_MODE
-                if (query[i].chunkSize > 0) {
-                    if (!PQsetChunkedRowsMode(s->conn, query[i].chunkSize)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQsetChunkedRowsMode"); rc = NGX_DECLINED; goto ret; }
-                    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQsetChunkedRowsMode(%i)", query[i].chunkSize);
-                }
+                ngx_pq_chunk(s, d);
 #endif
             }
         }
@@ -778,7 +784,13 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
         ngx_flag_t finished = 0;
         for (ngx_uint_t nulls = 0; !PQisBusy(s->conn); ) { /* PQgetResult blocks the worker while PQisBusy */
             PGresult *res;
-            if (!(res = PQgetResult(s->conn))) { if (nulls++) { finished = 1; break; } continue; } /* one NULL ends a pipelined query's results, two in a row end them all */
+            if (!(res = PQgetResult(s->conn))) { /* one NULL ends a pipelined query's results, two in a row end them all */
+                if (nulls++) { finished = 1; break; }
+#ifdef LIBPQ_HAS_CHUNK_MODE
+                ngx_pq_chunk(s, d); /* the next query is at the head of libpq's queue now, its results not parsed yet */
+#endif
+                continue;
+            }
             nulls = 0;
             if (PQstatus(s->conn) != CONNECTION_OK) { PQclear(res); goto done; }
             ngx_int_t rc = s->rc;

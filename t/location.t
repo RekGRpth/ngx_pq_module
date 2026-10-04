@@ -1362,3 +1362,51 @@ argument 1 contains a NUL byte
 --- error_log
 argument 1 contains a NUL byte
 --- timeout: 10
+
+=== TEST 47:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_prepare s "select generate_series(1, 3)";
+        pq_execute s output=value chunkSize=1;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"1\n2\n3"
+--- grep_error_log eval
+qr/PGRES_TUPLES_CHUNK$/
+--- grep_error_log_out
+PGRES_TUPLES_CHUNK
+PGRES_TUPLES_CHUNK
+PGRES_TUPLES_CHUNK
+--- timeout: 10
+
+=== TEST 48:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 0";
+        pq_query "select generate_series(1, 3)" output=value chunkSize=1;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"1\n2\n3"
+--- grep_error_log eval
+qr/PGRES_TUPLES_CHUNK$/
+--- grep_error_log_out
+PGRES_TUPLES_CHUNK
+PGRES_TUPLES_CHUNK
+PGRES_TUPLES_CHUNK
+--- timeout: 10
