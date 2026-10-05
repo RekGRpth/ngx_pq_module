@@ -858,7 +858,7 @@ static ngx_int_t ngx_pq_stream(ngx_pq_data_t *d) {
     if (c->write->delayed) { /* limit_rate: its own timer wakes us up, leave it alone */ }
     else if (d->blocked && c->write->active && !c->write->ready) ngx_add_timer(c->write, clcf->send_timeout);
     else if (!d->blocked && c->write->timer_set) ngx_del_timer(c->write);
-    if (d->blocked) ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "pq_buffering off: the client is busy, results wait");
+    if (d->blocked) { ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "pq_buffering off: the client is busy, results wait"); }
     return NGX_OK;
 }
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
