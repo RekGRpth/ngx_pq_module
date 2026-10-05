@@ -1182,3 +1182,26 @@ another command is already in progress
 --- response_body_like eval
 [".*", '"published_messages": 1,', "^\$", "^\$", '"published_messages": 3,', "^first;hello;idle;\$"]
 --- timeout: 10
+
+=== TEST 27:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    upstream pg {
+        pq_option user=postgres;
+        keepalive 1;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/ {
+        set $pg pg;
+        pq_pass $pg;
+        pq_query "select set_config('my.n', (coalesce(nullif(current_setting('my.n', true), ''), '0')::int + 1)::text, false)" output=value;
+    }
+--- request eval
+["GET /", "GET /"]
+--- error_code eval
+[200, 200]
+--- response_body_like eval
+["^\\d+\$", "^(?!1\$)\\d+\$"]
+--- timeout: 10
