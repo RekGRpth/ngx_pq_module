@@ -1933,7 +1933,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
             str[i].len -= sizeof("connect_timeout=") - 1;
             ngx_int_t n = ngx_parse_time(&str[i], 0);
             if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
-            connect->timeout = (ngx_msec_t)n;
+            connect->timeout = n ? (ngx_msec_t)n : NGX_MAX_INT32_VALUE; /* 0 is "wait indefinitely" for libpq, not a timer that fires at once: the longest an nginx timer takes (~24 days) */
             continue;
         }
         if (str[i].len > sizeof("application_name=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"application_name=", sizeof("application_name=") - 1)) application_name = str[i];

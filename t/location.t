@@ -1850,3 +1850,20 @@ GET /
 --- must_die
 --- error_log
 "pq_option" directive invalid connection option "x"
+
+=== TEST 72:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres connect_timeout=0;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+1
+--- timeout: 10
