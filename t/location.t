@@ -1767,3 +1767,86 @@ CORE::join("", map { "$_\x{0a}" } 1..100000)
 --- error_log
 the client is busy, results wait
 --- timeout: 20
+
+=== TEST 67:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres "options=-c statement_timeout=5s";
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "show statement_timeout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+5s
+--- timeout: 10
+
+=== TEST 68:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres "application_name=it's a\\b";
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "show application_name" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+it's a\b
+--- timeout: 10
+
+=== TEST 69:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres "options='-c statement_timeout=7s'";
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "show statement_timeout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+7s
+--- timeout: 10
+
+=== TEST 70:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres options= dbname=template1;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select current_database()" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body chomp
+template1
+--- timeout: 10
+
+=== TEST 71:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_option user=postgres x=1;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1";
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+"pq_option" directive invalid connection option "x"

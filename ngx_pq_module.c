@@ -982,6 +982,17 @@ static void ngx_pq_notice_processor(void *arg, const char *message) {
     ngx_pq_log_error(NGX_LOG_NOTICE, s->connection->log, 0, message, "PGRES_NONFATAL_ERROR");
 }
 
+static void ngx_pq_conninfo_option(PQExpBuffer conninfo, ngx_str_t *option) { /* name='value': quoted for libpq, so spaces ("options=-c statement_timeout=5s"), quotes and backslashes in the value survive */
+    u_char *e = option->data + option->len, *v = ngx_strlchr(option->data, e, '=');
+    if (!v || (++v < e && *v == '\'')) { appendBinaryPQExpBuffer(conninfo, (char *)option->data, option->len); return; } /* no "=" (libpq rejects it), or quoted already (as had to be done before); an empty value becomes '' */
+    appendBinaryPQExpBuffer(conninfo, (char *)option->data, v - option->data);
+    appendPQExpBufferChar(conninfo, '\'');
+    for (u_char *p = v; p < e; p++) {
+        if (*p == '\'' || *p == '\\') appendPQExpBufferChar(conninfo, '\\');
+        appendPQExpBufferChar(conninfo, *p);
+    }
+    appendPQExpBufferChar(conninfo, '\'');
+}
 static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
@@ -1002,7 +1013,7 @@ static ngx_int_t ngx_pq_peer_open(ngx_peer_connection_t *pc, void *data) {
     ngx_str_t *option = connect->options.elts;
     for (ngx_uint_t i = 0; i < connect->options.nelts; i++) {
         if (i) appendPQExpBufferChar(&conninfo, ' ');
-        appendBinaryPQExpBuffer(&conninfo, (char *)option[i].data, option[i].len);
+        ngx_pq_conninfo_option(&conninfo, &option[i]);
     }
     if (pc->sockaddr->sa_family != AF_UNIX) {
         appendPQExpBufferStr(&conninfo, " host=");
@@ -1936,7 +1947,26 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
         ngx_memzero(option, sizeof(*option));
         ngx_str_set(option, "application_name=nginx");
     }
-    return NGX_CONF_OK;
+    PQExpBufferData conninfo; /* catch what libpq won't take now, not as a 500 on every request */
+    initPQExpBuffer(&conninfo);
+    option = connect->options.elts;
+    for (ngx_uint_t i = 0; i < connect->options.nelts; i++) {
+        if (i) appendPQExpBufferChar(&conninfo, ' ');
+        ngx_pq_conninfo_option(&conninfo, &option[i]);
+    }
+    char *err = NULL, *rv = NGX_CONF_OK;
+    PQconninfoOption *parsed;
+    if (PQExpBufferDataBroken(conninfo)) rv = "PQExpBufferDataBroken";
+    else if (!(parsed = PQconninfoParse(conninfo.data, &err))) {
+        ngx_str_t msg = { err ? ngx_strlen(err) : 0, (u_char *)err };
+        while (msg.len && (msg.data[msg.len - 1] == '\n' || msg.data[msg.len - 1] == '.')) msg.len--;
+        u_char *p;
+        rv = (p = ngx_pnalloc(cf->pool, msg.len + 1)) ? (char *)p : "!ngx_pnalloc";
+        if (p) *ngx_cpymem(p, msg.data, msg.len) = '\0';
+        if (err) PQfreemem(err);
+    } else PQconninfoFree(parsed);
+    termPQExpBuffer(&conninfo);
+    return rv;
 }
 static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx_array_t *queries) {
     ngx_pq_query_t *query;
