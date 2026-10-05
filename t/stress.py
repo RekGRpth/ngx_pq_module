@@ -7,7 +7,7 @@ terminated with pg_terminate_backend every half a second. By default the
 module is built with AddressSanitizer from the configured nginx tree, like
 t/asan.sh does.
 
-Usage: t/stress.py [--duration 120] [--clients 50] [--port 1990] [--reload N] [--no-asan] [--keep]
+Usage: t/stress.py [--duration 120] [--clients 50] [--port 1990] [--reload N] [--rss N] [--no-kill] [--no-asan | --module PATH] [--keep]
   NGINX_SRC  configured nginx source tree with this module (default: $HOME/src/nginx)
 
 Fails on ASan reports, [alert]s, crashed workers, hung requests, wrong
@@ -21,6 +21,9 @@ parser.add_argument('--duration', type=float, default=120)
 parser.add_argument('--clients', type=int, default=50)
 parser.add_argument('--port', type=int, default=1990)
 parser.add_argument('--reload', type=float, default=0, help='reload nginx (SIGHUP) every N seconds under the load')
+parser.add_argument('--rss', type=float, default=0, help='print the resident memory of the workers every N seconds')
+parser.add_argument('--no-kill', action='store_true', help='do not terminate backends, so cached connections live through the run')
+parser.add_argument('--module', help='use this ngx_pq_module.so (not instrumented) instead of an ASan build')
 parser.add_argument('--no-asan', action='store_true', help='use the installed /etc/nginx/modules/ngx_pq_module.so')
 parser.add_argument('--keep', action='store_true', help='keep the temporary directory')
 opt = parser.parse_args()
@@ -40,8 +43,8 @@ def build_asan():
     subprocess.run(['sh', '-e'], input=cmds, cwd=nginx, text=True, check=True, stdout=subprocess.DEVNULL)
     return f'{W}/ngx_pq_module.so'
 
-SO = '/etc/nginx/modules/ngx_pq_module.so' if opt.no_asan else build_asan()
-LIBASAN = None if opt.no_asan else subprocess.check_output(['cc', '-print-file-name=libasan.so'], text=True).strip()
+SO = opt.module or ('/etc/nginx/modules/ngx_pq_module.so' if opt.no_asan else build_asan())
+LIBASAN = None if opt.no_asan or opt.module else subprocess.check_output(['cc', '-print-file-name=libasan.so'], text=True).strip()
 
 CONF = f'''daemon off; master_process on; worker_processes 2;
 error_log {W}/logs/error.log info; pid {W}/logs/nginx.pid;
@@ -126,6 +129,23 @@ async def reloader(stop, p):
         await asyncio.sleep(opt.reload)
         p.send_signal(signal.SIGHUP); count('reloads')
 
+def workers_rss(master):
+    rss = []
+    for stat in glob.glob('/proc/[0-9]*/stat'):
+        try:
+            fields = open(stat).read().rsplit(')', 1)[1].split()
+            if int(fields[1]) != master: continue
+            status = open(stat[:-4] + 'status').read()
+            rss.append(int(re.search(r'VmRSS:\s+(\d+)', status).group(1)))
+        except (OSError, AttributeError, IndexError, ValueError): pass
+    return sorted(rss)
+
+async def rss_monitor(stop, p):
+    start = time.time()
+    while time.time() < stop:
+        print(f'{time.time() - start:6.0f}s  workers RSS, KB: {workers_rss(p.pid)}  ({stats.get("200 ok", 0)} ok so far)', flush=True)
+        await asyncio.sleep(opt.rss)
+
 def stress_backends():
     try:
         return subprocess.check_output(['psql', '-U', 'postgres', '-h', '/run/postgresql', '-Atc',
@@ -141,7 +161,7 @@ async def main():
     p = subprocess.Popen(['nginx', '-p', W, '-c', os.path.join(W, 'nginx.conf')], env=env)
     await asyncio.sleep(1.5)
     stop = time.time() + opt.duration
-    await asyncio.gather(killer(stop), *([reloader(stop, p)] if opt.reload else []), *[client(stop) for _ in range(opt.clients)])
+    await asyncio.gather(*([] if opt.no_kill else [killer(stop)]), *([reloader(stop, p)] if opt.reload else []), *([rss_monitor(stop, p)] if opt.rss else []), *[client(stop) for _ in range(opt.clients)])
     await asyncio.sleep(3)
     print('stress backends left idle after the load:', stress_backends())
     p.send_signal(3); p.wait(timeout=30)
