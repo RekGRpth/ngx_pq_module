@@ -1472,6 +1472,7 @@ v: xy
 --- timeout: 10
 
 === TEST 52:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_push_stream_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_push_stream_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;

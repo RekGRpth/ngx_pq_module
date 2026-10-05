@@ -938,6 +938,7 @@ GET /
 --- timeout: 10
 
 === TEST 20:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_push_stream_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_push_stream_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -963,6 +964,7 @@ GET /
 --- timeout: 10
 
 === TEST 21:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_stream_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_stream_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;

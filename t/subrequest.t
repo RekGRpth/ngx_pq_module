@@ -7,6 +7,7 @@ run_tests();
 __DATA__
 
 === TEST 1:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -27,6 +28,7 @@ ok
 --- timeout: 10
 
 === TEST 2:
+--- skip_eval: 1: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -47,6 +49,7 @@ GET /
 --- timeout: 10
 
 === TEST 3:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -68,6 +71,7 @@ user bob
 --- timeout: 10
 
 === TEST 4:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -88,6 +92,7 @@ GET /
 --- timeout: 10
 
 === TEST 5:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -110,6 +115,7 @@ GET /
 --- timeout: 10
 
 === TEST 6:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -142,6 +148,7 @@ GET /
 --- timeout: 10
 
 === TEST 7:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -163,6 +170,7 @@ ok
 --- timeout: 10
 
 === TEST 8:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
@@ -186,6 +194,7 @@ GET /
 --- timeout: 20
 
 === TEST 9:
+--- skip_eval: 2: !-e "/etc/nginx/modules/ngx_http_echo_module.so"
 --- main_config
     load_module /etc/nginx/modules/ngx_http_echo_module.so;
     load_module /etc/nginx/modules/ngx_pq_module.so;
