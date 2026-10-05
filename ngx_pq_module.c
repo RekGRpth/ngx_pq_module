@@ -687,7 +687,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
                     ngx_str_t value;
                     if (ngx_http_complex_value(r, &argument[j].oid.complex, &value) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_http_complex_value != NGX_OK"); goto ret; }
                     ngx_int_t n = ngx_atoi(value.data, value.len);
-                    if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "ngx_atoi == NGX_ERROR"); goto ret; }
+                    if (n == NGX_ERROR) { ngx_log_error(NGX_LOG_ERR, c->log, 0, "oid \"%V\" of argument %ui is not a number", &value, j + 1); goto ret; }
                     argument[j].oid.value = n;
                 }
                 qq->paramTypes[j] = argument[j].oid.value;
@@ -1837,7 +1837,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
         if (str[i].len >= sizeof("chunkSize=") - 1 && !ngx_strncasecmp(str[i].data, (u_char *)"chunkSize=", sizeof("chunkSize=") - 1)) {
             if (!(query->type & ngx_pq_type_output)) return "output not allowed";
             ngx_int_t n = ngx_atoi(str[i].data + sizeof("chunkSize=") - 1, str[i].len - (sizeof("chunkSize=") - 1));
-            if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
+            if (n == NGX_ERROR) return "\"chunkSize\" value must be a number";
             if (n <= 0) return "chunkSize must be positive";
             query->chunkSize = n;
             continue;
@@ -1870,7 +1870,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
         } else {
             ngx_int_t n = ngx_atoi(oid.data, oid.len);
-            if (n == NGX_ERROR) return "ngx_atoi == NGX_ERROR";
+            if (n == NGX_ERROR) return "oid must be a number";
             argument->oid.value = n;
         }
     }
@@ -1932,7 +1932,7 @@ static char *ngx_pq_option_loc_ups_conf(ngx_conf_t *cf, ngx_pq_connect_t *connec
             str[i].data += sizeof("connect_timeout=") - 1;
             str[i].len -= sizeof("connect_timeout=") - 1;
             ngx_int_t n = ngx_parse_time(&str[i], 0);
-            if (n == NGX_ERROR) return "ngx_parse_time == NGX_ERROR";
+            if (n == NGX_ERROR) return "\"connect_timeout\" value must be a time";
             connect->timeout = n ? (ngx_msec_t)n : NGX_MAX_INT32_VALUE; /* 0 is "wait indefinitely" for libpq, not a timer that fires at once: the longest an nginx timer takes (~24 days) */
             continue;
         }

@@ -1867,3 +1867,65 @@ GET /
 --- response_body chomp
 1
 --- timeout: 10
+
+=== TEST 73:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1" output=value chunkSize=x;
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+"pq_query" directive "chunkSize" value must be a number
+
+=== TEST 74:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_option user=postgres connect_timeout=abc;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1";
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+"pq_option" directive "connect_timeout" value must be a time
+
+=== TEST 75:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select $1" 1::abc;
+    }
+--- request
+GET /
+--- must_die
+--- error_log
+"pq_query" directive oid must be a number
+
+=== TEST 76:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select $1" 1::$arg_o output=value;
+    }
+--- request
+GET /?o=x
+--- error_code: 502
+--- error_log
+oid "x" of argument 1 is not a number
+--- timeout: 10
