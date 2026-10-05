@@ -860,7 +860,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
     for (;;) { /* events are edge-triggered: keep reading until PQconsumeInput gets nothing new, i.e. the socket is drained */
         int avail = s->conn->inEnd - s->conn->inStart;
-        if (!PQconsumeInput(s->conn)) { ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; }
+        if (!PQconsumeInput(s->conn)) { ngx_pq_log_error((d ? NGX_LOG_ERR : NGX_LOG_INFO), c->log, 0, PQerrorMessage(s->conn), "!PQconsumeInput"); return NGX_DECLINED; } /* no request: an idle connection closed by the server (pg_terminate_backend, idle_session_timeout, restart) is routine */
         ngx_flag_t consumed = s->conn->inEnd - s->conn->inStart > avail;
         ngx_flag_t finished = 0;
         for (ngx_uint_t nulls = 0; !PQisBusy(s->conn); ) { /* PQgetResult blocks the worker while PQisBusy */
@@ -1264,7 +1264,11 @@ cont:;
     }
     ngx_connection_t *c = s->connection;
     if (!c) return;
-    if (c->read->timer_set) s->timeout = c->read->timer.key - ngx_current_msec;
+    s->timeout = 0; /* not a previous request's value */
+    if (c->read->timer_set) { /* what is left of it (keepalive_timeout); one already due fires at once instead of wrapping around */
+        ngx_msec_int_t left = (ngx_msec_int_t) (c->read->timer.key - ngx_current_msec);
+        s->timeout = left > 0 ? (ngx_msec_t) left : 1;
+    }
     s->read = c->read->handler;
     s->write = c->write->handler;
     c->read->handler = ngx_pq_read_handler;
