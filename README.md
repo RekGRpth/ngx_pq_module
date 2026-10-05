@@ -2,6 +2,20 @@
 
 # Directives
 
+pq_buffering
+-------------
+* Syntax: **pq_buffering** *on* | *off*
+* Default: on
+* Context: main, server, location
+
+With on, the response is sent once all queries are done, with Content-Length, and an error at any point gives an error status (e.g. 502). With off, it is sent as the results come (chunked), which keeps memory low for large results (chunkSize=, COPY ... TO STDOUT): the status (200 or pq_empty) is sent with the first output, so an error after that cuts the response off instead, and pq_next_upstream doesn't retry; reading from the database pauses while the client can't take more:
+```nginx
+location =/postgres {
+    pq_buffering off; # stream the result
+    pq_pass postgres; # upstream is postgres
+    pq_query "COPY (SELECT * FROM big) TO STDOUT" output=value; # sent as it comes
+}
+```
 pq_empty
 -------------
 * Syntax: **pq_empty** *200* | *204* | *400* | *401* | *403* | *404* | *409*

@@ -1657,3 +1657,112 @@ read back from
 --- error_log
 read back from
 --- timeout: 10
+
+=== TEST 62:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_buffering off;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "copy (select i from generate_series(1, 100000) i) to stdout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_headers
+Transfer-Encoding: chunked
+!Content-Length
+--- response_body eval
+CORE::join("", map { "$_\x{0a}" } 1..100000)
+--- timeout: 10
+
+=== TEST 63:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_buffering off;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select repeat('x', 100000) union all select 'end' from pg_sleep(1)" output=value chunkSize=1;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+("x" x 100000) . "\nend"
+--- grep_error_log eval
+qr/PGRES_TUPLES_CHUNK$|http chunk: [1-9]\d*|finalize http upstream request: \d+/
+--- grep_error_log_out
+PGRES_TUPLES_CHUNK
+http chunk: 100000
+PGRES_TUPLES_CHUNK
+finalize http upstream request: 0
+http chunk: 4
+--- timeout: 10
+
+=== TEST 64:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_buffering off;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select case when i = 1 then repeat('x', 100000) else (1 / (i - 2))::text end from generate_series(1, 2) i" output=value chunkSize=1;
+    }
+--- request
+GET /
+--- ignore_response
+--- error_log
+division by zero
+--- grep_error_log eval
+qr/PGRES_TUPLES_CHUNK$|http chunk: [1-9]\d*|finalize http upstream request: \d+/
+--- grep_error_log_out
+PGRES_TUPLES_CHUNK
+http chunk: 100000
+finalize http upstream request: 502
+--- timeout: 10
+
+=== TEST 65:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_buffering off;
+        pq_empty 404;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 1 where false" output=value;
+    }
+--- request
+GET /
+--- error_code: 404
+--- timeout: 10
+
+=== TEST 66:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        limit_rate 300k;
+        pq_buffering off;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "copy (select i from generate_series(1, 100000) i) to stdout" output=value;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+CORE::join("", map { "$_\x{0a}" } 1..100000)
+--- error_log
+the client is busy, results wait
+--- timeout: 20

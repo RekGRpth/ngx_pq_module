@@ -183,6 +183,8 @@ typedef struct {
     ngx_array_t variables;
     ngx_chain_t *last;
     ngx_flag_t empty;
+    ngx_flag_t blocked; /* pq_buffering off: the client can't take more yet, results wait in the socket */
+    ngx_flag_t body; /* something was written to the response body */
     ngx_flag_t failed; /* ngx_pq_queries failed: the connection is in an unknown state and must not be reused */
     ngx_flag_t inner; /* ngx_pq_peer_init_outer is initializing the balancers below us */
     ngx_flag_t tuples;
@@ -278,6 +280,7 @@ static ngx_int_t ngx_pq_output(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_query_
             b->temporary = 1;
         }
         b->last = ngx_copy(b->last, data, len);
+        d->body = 1;
     }
     return NGX_OK;
 }
@@ -507,7 +510,7 @@ static ngx_flag_t ngx_pq_written(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_pq_quer
         for (ngx_uint_t i = 0; i < variables->nelts; i++) if (variable[i].index == query->index) return 1;
         return 0;
     }
-    return query->output && d->last;
+    return query->output && d->body;
 }
 static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult *res) {
     char *value;
@@ -821,6 +824,37 @@ again:
     return NGX_AGAIN;
 }
 #endif
+static void ngx_pq_downstream_handler(ngx_http_request_t *r);
+/* pq_buffering off: send what the results so far produced, the header with the first of it */
+static ngx_int_t ngx_pq_stream(ngx_pq_data_t *d) {
+    ngx_http_request_t *r = d->request;
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_connection_t *c = r->connection;
+    if (!u->header_sent) {
+        if (!u->out_bufs) return NGX_OK;
+        if (!r->headers_out.status) { /* as ngx_pq_finalize_request does */
+            ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+            r->headers_out.status = d->empty ? plcf->empty : NGX_HTTP_OK;
+        }
+        r->headers_out.content_length_n = -1; /* not known yet: chunked */
+        ngx_int_t rc = ngx_http_send_header(r);
+        if (rc == NGX_ERROR || rc > NGX_OK) return NGX_ERROR;
+        u->header_sent = 1;
+        r->write_event_handler = ngx_pq_downstream_handler;
+    }
+    if (r->header_only) { u->out_bufs = NULL; d->last = NULL; return NGX_OK; }
+    if (ngx_http_output_filter(r, u->out_bufs) == NGX_ERROR) return NGX_ERROR;
+    ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
+    d->last = NULL;
+    d->blocked = u->busy_bufs != NULL;
+    ngx_http_core_loc_conf_t *clcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    if (ngx_handle_write_event(c->write, clcf->send_lowat) != NGX_OK) return NGX_ERROR;
+    if (c->write->delayed) { /* limit_rate: its own timer wakes us up, leave it alone */ }
+    else if (d->blocked && c->write->active && !c->write->ready) ngx_add_timer(c->write, clcf->send_timeout);
+    else if (!d->blocked && c->write->timer_set) ngx_del_timer(c->write);
+    if (d->blocked) ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "pq_buffering off: the client is busy, results wait");
+    return NGX_OK;
+}
 static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
     ngx_connection_t *c = s->connection;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "%s", __func__);
@@ -859,6 +893,13 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             PQclear(res);
             if (rc == NGX_AGAIN) break; /* COPY row not fully received yet */
             if (s->rc == NGX_OK) s->rc = rc; /* the first error stands: a later query's success must not turn it into 200 */
+            if (d && !d->request->upstream->buffering && d->request->upstream->out_bufs && (d->request->upstream->out_bufs->next || d->request->upstream->out_bufs->buf->last - d->request->upstream->out_bufs->buf->pos >= NGX_PQ_OUTPUT_BUFFER)) { /* pq_buffering off: a buffer's worth is ready */
+                if (ngx_pq_stream(d) != NGX_OK) { d->failed = 1; return NGX_HTTP_CLIENT_CLOSED_REQUEST; }
+                if (d->blocked) return NGX_AGAIN; /* the client can't take more: leave the rest in the socket, ngx_pq_downstream_handler resumes */
+            }
+        }
+        if (!consumed && !finished && d && !d->request->upstream->buffering && d->request->upstream->out_bufs) { /* pq_buffering off: nothing more for now, pass on what there is */
+            if (ngx_pq_stream(d) != NGX_OK) { d->failed = 1; return NGX_HTTP_CLIENT_CLOSED_REQUEST; }
         }
         if (!consumed) { if (finished) goto done; return NGX_AGAIN; } /* finish only once the socket is drained: an EOF that came with the last data gets no event of its own */
     }
@@ -1106,6 +1147,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     /* every try (pq_next_upstream) starts from scratch: drop what a previous try cut off part way already produced; ngx_pq_reinit_request doesn't run for retries */
     r->upstream->out_bufs = NULL;
     d->last = NULL;
+    d->body = 0;
     d->variables.nelts = 0;
     d->empty = 0;
     d->tuples = 0;
@@ -1307,6 +1349,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
         case CONNECTION_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "CONNECTION_OK");
             if (c->read->timedout || c->write->timedout) return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_GATEWAY_TIME_OUT);
             if (c->write->timer_set) ngx_del_timer(c->write); /* connected: connect_timeout doesn't limit how long queries run */
+            if (d->blocked) return; /* pq_buffering off: wait for the client, ngx_pq_downstream_handler resumes */
             rc = ngx_pq_result(s, d);
             goto ret;
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQstatus = %i", PQstatus(s->conn)); break;
@@ -1314,6 +1357,7 @@ static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) 
     if (c->read->timedout || c->write->timedout) return ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_TIMEOUT);
     rc = ngx_pq_poll(s, d);
 ret:
+    if (u->header_sent && (rc == NGX_BUSY || rc == NGX_DECLINED || rc == NGX_ERROR)) rc = NGX_HTTP_BAD_GATEWAY; /* pq_buffering off and the response has begun: no retry, it gets cut off */
     switch (rc) {
         case NGX_AGAIN: break;
         case NGX_BUSY: ngx_http_upstream_next_my(r, u, NGX_HTTP_UPSTREAM_FT_NOLIVE); break;
@@ -1323,6 +1367,19 @@ ret:
     }
 }
 
+static void ngx_pq_downstream_handler(ngx_http_request_t *r) { /* pq_buffering off: the client can take more */
+    ngx_http_upstream_t *u = r->upstream;
+    ngx_pq_data_t *d = ngx_http_get_module_ctx(r, ngx_pq_module);
+    ngx_connection_t *c = r->connection;
+    if (c->write->timedout) {
+        c->timedout = 1;
+        ngx_connection_error(c, NGX_ETIMEDOUT, "client timed out");
+        return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_REQUEST_TIME_OUT);
+    }
+    ngx_flag_t blocked = d->blocked;
+    if (ngx_pq_stream(d) != NGX_OK) { d->failed = 1; return ngx_http_upstream_finalize_request(r, u, NGX_HTTP_CLIENT_CLOSED_REQUEST); }
+    if (blocked && !d->blocked && d->save && d->save->connection) ngx_pq_event_handler(r, u); /* results that came meanwhile got no event of their own (edge-triggered) */
+}
 static void ngx_pq_abort_request(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
 }
@@ -1352,6 +1409,12 @@ static void ngx_pq_finalize_request(ngx_http_request_t *r, ngx_int_t rc) {
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     if (rc >= NGX_HTTP_SPECIAL_RESPONSE) return;
+    if (u->header_sent) { /* pq_buffering off: the header went with the first output, send the rest */
+        if (!u->out_bufs || r->header_only) return;
+        if (ngx_http_output_filter(r, u->out_bufs) == NGX_ERROR) return;
+        ngx_chain_update_chains(r->pool, &u->free_bufs, &u->busy_bufs, &u->out_bufs, u->output.tag);
+        return;
+    }
     if (!r->headers_out.status) {
         if (d->empty) {
             ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
@@ -1979,6 +2042,7 @@ static void *ngx_pq_create_loc_conf(ngx_conf_t *cf) {
     if (!conf) return NULL;
     ngx_pq_connect_init(&conf->connect);
     conf->upstream.buffer_size = NGX_CONF_UNSET_SIZE;
+    conf->upstream.buffering = NGX_CONF_UNSET;
     conf->upstream.ignore_client_abort = NGX_CONF_UNSET;
     conf->upstream.next_upstream_timeout = NGX_CONF_UNSET_MSEC;
     conf->upstream.next_upstream_tries = NGX_CONF_UNSET_UINT;
@@ -1999,6 +2063,7 @@ static char *ngx_pq_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_msec_value(conf->upstream.next_upstream_timeout, prev->upstream.next_upstream_timeout, 0);
     ngx_conf_merge_size_value(conf->upstream.buffer_size, prev->upstream.buffer_size, (size_t)ngx_pagesize);
     ngx_conf_merge_uint_value(conf->upstream.next_upstream_tries, prev->upstream.next_upstream_tries, 0);
+    ngx_conf_merge_value(conf->upstream.buffering, prev->upstream.buffering, 1);
     ngx_conf_merge_value(conf->upstream.ignore_client_abort, prev->upstream.ignore_client_abort, 0);
     ngx_conf_merge_value(conf->upstream.pass_request_body, prev->upstream.pass_request_body, 0);
     ngx_conf_merge_uint_value(conf->empty, prev->empty, NGX_HTTP_OK);
@@ -2126,6 +2191,7 @@ static ngx_http_module_t ngx_pq_ctx = {
     .merge_loc_conf = ngx_pq_merge_loc_conf
 };
 static ngx_command_t ngx_pq_commands[] = {
+  { ngx_string("pq_buffering"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG, ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffering), NULL },
   { ngx_string("pq_buffer_size"), NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_LOC_CONF_OFFSET, offsetof(ngx_pq_loc_conf_t, upstream.buffer_size), NULL },
   { ngx_string("pq_buffer_size"), NGX_HTTP_UPS_CONF|NGX_CONF_TAKE1, ngx_conf_set_size_slot, NGX_HTTP_SRV_CONF_OFFSET, offsetof(ngx_pq_srv_conf_t, buffer_size), NULL },
   { ngx_string("pq_execute"), NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF|NGX_CONF_1MORE, ngx_pq_execute_loc_conf, NGX_HTTP_LOC_CONF_OFFSET, ngx_pq_type_location|ngx_pq_type_execute|ngx_pq_type_output, NULL },
