@@ -7,19 +7,20 @@ terminated with pg_terminate_backend every half a second. By default the
 module is built with AddressSanitizer from the configured nginx tree, like
 t/asan.sh does.
 
-Usage: t/stress.py [--duration 120] [--clients 50] [--port 1990] [--no-asan] [--keep]
+Usage: t/stress.py [--duration 120] [--clients 50] [--port 1990] [--reload N] [--no-asan] [--keep]
   NGINX_SRC  configured nginx source tree with this module (default: $HOME/src/nginx)
 
 Fails on ASan reports, [alert]s, crashed workers, hung requests, wrong
 response bodies, or backends left after nginx exits. 502s and streamed
 responses cut off part way are expected: backends are killed meanwhile.
 """
-import argparse, asyncio, glob, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, asyncio, glob, os, re, shutil, signal, subprocess, sys, tempfile, time
 
 parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--duration', type=float, default=120)
 parser.add_argument('--clients', type=int, default=50)
 parser.add_argument('--port', type=int, default=1990)
+parser.add_argument('--reload', type=float, default=0, help='reload nginx (SIGHUP) every N seconds under the load')
 parser.add_argument('--no-asan', action='store_true', help='use the installed /etc/nginx/modules/ngx_pq_module.so')
 parser.add_argument('--keep', action='store_true', help='keep the temporary directory')
 opt = parser.parse_args()
@@ -120,6 +121,11 @@ async def killer(stop):
             w.write(b'GET /kill HTTP/1.0\r\nHost: x\r\n\r\n'); await w.drain(); await r.read(-1); w.close(); count('backends killed')
         except Exception: count('kill failed')
 
+async def reloader(stop, p):
+    while time.time() + opt.reload < stop:
+        await asyncio.sleep(opt.reload)
+        p.send_signal(signal.SIGHUP); count('reloads')
+
 def stress_backends():
     try:
         return subprocess.check_output(['psql', '-U', 'postgres', '-h', '/run/postgresql', '-Atc',
@@ -135,7 +141,7 @@ async def main():
     p = subprocess.Popen(['nginx', '-p', W, '-c', os.path.join(W, 'nginx.conf')], env=env)
     await asyncio.sleep(1.5)
     stop = time.time() + opt.duration
-    await asyncio.gather(killer(stop), *[client(stop) for _ in range(opt.clients)])
+    await asyncio.gather(killer(stop), *([reloader(stop, p)] if opt.reload else []), *[client(stop) for _ in range(opt.clients)])
     await asyncio.sleep(3)
     print('stress backends left idle after the load:', stress_backends())
     p.send_signal(3); p.wait(timeout=30)
