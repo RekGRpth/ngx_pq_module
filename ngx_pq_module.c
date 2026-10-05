@@ -84,6 +84,7 @@ typedef struct {
     ngx_array_t arguments;
     ngx_array_t commands;
     ngx_flag_t header;
+    ngx_flag_t request_body; /* an argument refers to $request_body */
     ngx_flag_t string;
 #ifdef LIBPQ_HAS_CHUNK_MODE
     ngx_int_t chunkSize;
@@ -1591,6 +1592,19 @@ static ngx_int_t ngx_pq_arguments_nul(ngx_http_request_t *r, ngx_array_t *querie
     }
     return NGX_OK;
 }
+static ngx_flag_t ngx_pq_queries_use_body(ngx_array_t *queries) {
+    ngx_pq_query_t *query = queries->elts;
+    for (ngx_uint_t i = 0; i < queries->nelts; i++) if (query[i].request_body) return 1;
+    return 0;
+}
+static ngx_flag_t ngx_pq_body_needed(ngx_http_request_t *r) { /* whether some query of the request takes $request_body, so a body buffered to a file must be read back */
+    ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
+    if (ngx_pq_queries_use_body(&plcf->queries)) return 1;
+    if (plcf->complex.value.data) return 1; /* pq_pass $variable: the upstream, with its own queries, is known only later */
+    ngx_http_upstream_srv_conf_t *uscf = plcf->upstream.upstream;
+    if (uscf && uscf->srv_conf) return ngx_pq_queries_use_body(&((ngx_pq_srv_conf_t *)ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module))->queries);
+    return 0;
+}
 static ngx_int_t ngx_pq_body_in_memory(ngx_http_request_t *r) { /* $request_body is empty when the body went to a temporary file (larger than client_body_buffer_size): read it back so arguments get all of it */
     ngx_http_request_body_t *rb = r->request_body;
     if (!rb || !rb->temp_file) return NGX_OK;
@@ -1601,6 +1615,7 @@ static ngx_int_t ngx_pq_body_in_memory(ngx_http_request_t *r) { /* $request_body
     if (n != size) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_read_file(\"%V\") = %z, expected %O", &rb->temp_file->file.name, n, size); return NGX_ERROR; }
     b->last = b->pos + n;
     b->last_buf = 1;
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "request body of %O bytes read back from \"%V\"", size, &rb->temp_file->file.name);
     ngx_chain_t *cl;
     if (!(cl = ngx_alloc_chain_link(r->pool))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); return NGX_ERROR; }
     cl->buf = b;
@@ -1611,7 +1626,7 @@ static ngx_int_t ngx_pq_body_in_memory(ngx_http_request_t *r) { /* $request_body
 }
 static void ngx_pq_body_handler(ngx_http_request_t *r) { /* reject arguments no text value can hold before connecting: a client error, not an upstream failure to retry */
     ngx_pq_loc_conf_t *plcf = ngx_http_get_module_loc_conf(r, ngx_pq_module);
-    if (ngx_pq_body_in_memory(r) != NGX_OK) { ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR); return; }
+    if (ngx_pq_body_needed(r) && ngx_pq_body_in_memory(r) != NGX_OK) { ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR); return; }
     switch (ngx_pq_arguments_nul(r, &plcf->queries)) {
         case NGX_OK: ngx_http_upstream_init(r); return;
         case NGX_DECLINED: ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST); return;
@@ -1640,6 +1655,19 @@ static ngx_int_t ngx_pq_handler(ngx_http_request_t *r) {
     return NGX_DONE;
 }
 
+static ngx_flag_t ngx_pq_mentions_request_body(ngx_str_t *value) { /* $request_body or ${request_body}, not e.g. $request_body_file */
+    static ngx_str_t name = ngx_string("request_body");
+    u_char *e = value->data + value->len;
+    for (u_char *p = value->data; p < e; p++) if (*p == '$') {
+        u_char *q = p + 1;
+        ngx_flag_t brace = q < e && *q == '{';
+        if (brace) q++;
+        if ((size_t)(e - q) < name.len || ngx_strncmp(q, name.data, name.len)) continue;
+        q += name.len;
+        if (brace ? q < e && *q == '}' : q == e || !((*q >= '0' && *q <= '9') || (*q >= 'a' && *q <= 'z') || (*q >= 'A' && *q <= 'Z') || *q == '_')) return 1;
+    }
+    return 0;
+}
 static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *query) {
     ngx_str_t *str = cf->args->elts;
     for (ngx_uint_t i = query->type & ngx_pq_type_prepare ? 3 : 2; i < cf->args->nelts; i++) {
@@ -1753,6 +1781,7 @@ static char *ngx_pq_argument_output_loc_conf(ngx_conf_t *cf, ngx_pq_query_t *que
             if (ngx_http_script_variables_count(&value)) {
                 ngx_http_compile_complex_value_t ccv = {cf, &value, &argument->value.complex, 0, 0, 0};
                 if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
+                if (ngx_pq_mentions_request_body(&value)) query->request_body = 1;
             } else argument->value.str = value;
         }
         if (!oid.len) continue;

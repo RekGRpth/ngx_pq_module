@@ -153,6 +153,21 @@ location =/postgres {
     pq_pass $postgres; # upstream is taken from $postgres variable
 }
 ```
+pq_pass_request_body
+-------------
+* Syntax: **pq_pass_request_body** *on* | *off*
+* Default: off
+* Context: main, server, location
+
+Enables reading the client request body, so queries can take it as an argument via the $request_body variable. The whole body is kept in memory: one larger than client_body_buffer_size is buffered to a temporary file by nginx and read back into memory when some query of the location (or of its upstream) refers to $request_body, so keep client_max_body_size reasonable:
+```nginx
+location =/postgres {
+    client_max_body_size 1m; # the body, up to 1m, is held in memory
+    pq_pass_request_body on; # read the request body
+    pq_pass postgres; # upstream is postgres
+    pq_query "insert into t (body) values ($1)" $request_body; # the body as an argument
+}
+```
 pq_query
 -------------
 * Syntax: **pq_query** *sql* [ *$argument_value* | *$argument_value*::*$argument_oid* ] [ output=*csv* | output=*plain* | output=*value* | output=*binary* | output=*$variable* ]

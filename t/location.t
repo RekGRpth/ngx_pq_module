@@ -1619,3 +1619,41 @@ GET /
 --- error_log
 output=binary takes a single value, the result has more
 --- timeout: 10
+
+=== TEST 60:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select length($1)" $request_body_file output=value;
+    }
+--- request eval
+"POST /\n" . ("a" x 20000)
+--- error_code: 200
+--- no_error_log
+read back from
+--- timeout: 10
+
+=== TEST 61:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_pass_request_body on;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select length($1)" "b${request_body}" output=value;
+    }
+--- request eval
+"POST /\n" . ("a" x 20000)
+--- error_code: 200
+--- response_body chomp
+20001
+--- error_log
+read back from
+--- timeout: 10
