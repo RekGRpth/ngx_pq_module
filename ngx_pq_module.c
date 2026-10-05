@@ -1863,6 +1863,9 @@ static char *ngx_pq_execute_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cmd, ngx
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
     if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
+#ifndef LIBPQ_HAS_PIPELINING
+    if (queries->nelts > 1) return "is one too many: several queries in a location or upstream need libpq with pipelining (PostgreSQL 14+)"; /* without it the second can't be sent while the first runs: every request would fail */
+#endif
     ngx_memzero(query, sizeof(*query));
     ngx_str_t *str = cf->args->elts;
     if (ngx_http_script_variables_count(&str[1])) {
@@ -1933,6 +1936,9 @@ static char *ngx_pq_prepare_query_loc_ups_conf(ngx_conf_t *cf, ngx_command_t *cm
     ngx_pq_query_t *query;
     if (!queries->elts && ngx_array_init(queries, cf->pool, 1, sizeof(*query)) != NGX_OK) return "ngx_array_init != NGX_OK";
     if (!(query = ngx_array_push(queries))) return "!ngx_array_push";
+#ifndef LIBPQ_HAS_PIPELINING
+    if (queries->nelts > 1) return "is one too many: several queries in a location or upstream need libpq with pipelining (PostgreSQL 14+)"; /* without it the second can't be sent while the first runs: every request would fail */
+#endif
     ngx_memzero(query, sizeof(*query));
     ngx_pq_command_t *command;
     if (ngx_array_init(&query->commands, cf->pool, 1, sizeof(*command)) != NGX_OK) return "ngx_array_init != NGX_OK";
