@@ -771,6 +771,7 @@ static ngx_int_t ngx_pq_queries(ngx_pq_save_t *s, ngx_pq_data_t *d, ngx_uint_t t
         case 1: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, c->log, 0, "PQflush == 1"); c->write->active = 1; break;
         case -1: ngx_pq_log_error(NGX_LOG_ERR, c->log, 0, PQerrorMessage(s->conn), "PQflush == -1"); goto ret;
     }
+    ngx_add_timer(c->read, NGX_MAX_INT32_VALUE); /* no time limit on queries, but a timer: a worker shutting down (reload, quit) waits only for those, so without one it would exit under a running query, dropping the request */
     rc = NGX_AGAIN;
 ret:
     termPQExpBuffer(&name);
@@ -1275,12 +1276,15 @@ cont:;
     ngx_http_request_t *r = d->request;
     ngx_http_upstream_t *u = r->upstream;
     ngx_http_upstream_srv_conf_t *uscf = u->conf->upstream;
+    ngx_pq_connect_t *connect = &((ngx_pq_loc_conf_t *)ngx_http_get_module_loc_conf(r, ngx_pq_module))->connect;
     if (uscf->srv_conf) {
         ngx_pq_srv_conf_t *pscf = ngx_http_conf_upstream_srv_conf(uscf, ngx_pq_module);
         if (pscf && pscf->log) log = pscf->log;
+        connect = &pscf->connect;
     }
     ngx_connection_t *c = s->connection;
     if (!c) return;
+    if (!s->keepalive) ngx_add_timer(c->read, connect->timeout); /* draining after a cancel: not the query's unlimited timer, a worker shutting down waits for it; if the results never come, ngx_pq_drain_close closes it */
     s->timeout = 0; /* not a previous request's value */
     if (c->read->timer_set) { /* what is left of it (keepalive_timeout); one already due fires at once instead of wrapping around */
         ngx_msec_int_t left = (ngx_msec_int_t) (c->read->timer.key - ngx_current_msec);
