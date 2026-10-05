@@ -1187,6 +1187,7 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
 static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
     ngx_pq_data_t *d = data;
+    if (pc->connection) pc->connection->read->ready = 0; /* stale: libpq, not nginx, reads this socket; left set, the keepalive module would peek into it right away and close the connection - freeing s - if anything is pending (a NOTIFY, a terminated backend's FATAL); ngx_pq_read_handler looks at it instead, posted below */
     d->peer.free(pc, d->peer.data, state);
     ngx_pq_save_t *s = d->save;
     if (!s) return;
@@ -1289,6 +1290,7 @@ cont:;
     c->read->log = log;
     c->write->log = log;
     if (!s->keepalive) d->save = NULL; /* draining after a cancel: closed as soon as the results are in, maybe before the log phase */
+    ngx_post_event(c->read, &ngx_posted_events); /* whatever is already in the socket gets no event of its own (edge-triggered) */
 }
 
 static ngx_int_t ngx_pq_peer_init_data(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf, ngx_pq_data_t *d) {
