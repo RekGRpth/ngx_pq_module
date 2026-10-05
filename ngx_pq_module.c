@@ -1120,7 +1120,8 @@ static void ngx_pq_read_handler(ngx_event_t *ev) {
         if (!ngx_terminate && !ngx_exiting && !c->error && !ev->error && !ev->timedout) {
             if (s->timeout) ngx_add_timer(c->read, s->timeout);
             ngx_int_t rc = ngx_pq_result(s, NULL);
-            if (rc == NGX_OK || rc == NGX_AGAIN || rc == NGX_DONE) return;
+            if (rc == NGX_OK || rc == NGX_AGAIN) { c->read->ready = 0; return; } /* libpq, not nginx, has read the socket dry; left set, freenginx's keepalive module takes the connection for one with stale data, opens another instead and evicts this one, with its LISTEN channels */
+            if (rc == NGX_DONE) return; /* s and c are gone */
         }
         if (s->keepalive) return s->read(ev); /* the keepalive module's close handler */
         return ngx_pq_drain_close(c, ev);
