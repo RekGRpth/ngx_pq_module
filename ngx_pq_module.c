@@ -1338,9 +1338,11 @@ static ngx_int_t ngx_pq_peer_init_upstream(ngx_conf_t *cf, ngx_http_upstream_srv
 static void ngx_http_upstream_next_my(ngx_http_request_t *r, ngx_http_upstream_t *u, ngx_uint_t ft_type) {
     ngx_http_upstream_handler_pt read_event_handler = u->read_event_handler;
     ngx_http_upstream_handler_pt write_event_handler = u->write_event_handler;
+    r->main->count++; /* ngx_http_upstream_next may finalize the request, freeing it with u: keep it alive until the handlers are restored */
     ngx_http_upstream_next(r, u, ft_type);
     u->read_event_handler = read_event_handler;
     u->write_event_handler = write_event_handler;
+    ngx_http_finalize_request(r, NGX_DONE); /* drop that reference: closes the request if it was finalized meanwhile */
 }
 
 static void ngx_pq_event_handler(ngx_http_request_t *r, ngx_http_upstream_t *u) {
