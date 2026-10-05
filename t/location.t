@@ -1566,3 +1566,56 @@ GET /
 --- must_die
 --- error_log
 unknown directive "pq_request_buffering"
+
+=== TEST 57:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        default_type application/octet-stream;
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select '\\x00010a0d'::bytea" output=binary;
+    }
+--- request
+GET /
+--- error_code: 200
+--- response_body eval
+"\x{00}\x{01}\x{0a}\x{0d}"
+--- timeout: 10
+
+=== TEST 58:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select 'a'::bytea, 'b'::bytea" output=binary;
+    }
+--- request
+GET /
+--- error_code: 502
+--- error_log
+output=binary takes a single value, the result has more
+--- timeout: 10
+
+=== TEST 59:
+--- main_config
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+--- config
+    location =/ {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "select generate_series(1, 2)" output=binary chunkSize=1;
+        pq_query "select 1" output=value;
+    }
+--- request
+GET /
+--- error_code: 502
+--- error_log
+output=binary takes a single value, the result has more
+--- timeout: 10

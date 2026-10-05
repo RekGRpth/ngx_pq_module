@@ -126,6 +126,7 @@ typedef struct {
     ngx_queue_t queue;
     ngx_str_t name; /* evaluated statement name of pq_prepare/pq_execute */
     ngx_flag_t chunked; /* PQsetChunkedRowsMode was tried for it */
+    ngx_uint_t values; /* output=binary: values of the result so far, across chunks */
     Oid *paramTypes;
 } ngx_pq_query_queue_t;
 
@@ -533,6 +534,10 @@ static ngx_int_t ngx_pq_res_tuples(ngx_pq_save_t *s, ngx_pq_data_t *d, PGresult 
     if (query->type & ngx_pq_type_location) { /* pq_empty is about the location's queries: an upstream one runs only on a new connection */
         if (!d->tuples) { d->tuples = 1; d->empty = PQntuples(res) == 0; } else if (PQntuples(res)) d->empty = 0;
     }
+    if (query->output == ngx_pq_output_binary && (qq->values += (ngx_uint_t)PQntuples(res) * PQnfields(res)) > 1) { /* binary values have no delimiter that can't occur in them, so a body of several couldn't be split again */
+        ngx_log_error(NGX_LOG_ERR, s->connection->log, 0, "output=binary takes a single value, the result has more");
+        return NGX_HTTP_BAD_GATEWAY;
+    }
     if (query->header && !qq->not_first) {
         qq->not_first = 1;
         if (ngx_pq_written(s, d, query)) if (ngx_pq_output(s, d, query, (const u_char *)"\n", sizeof("\n") - 1) != NGX_OK) return NGX_ERROR; /* separate from an earlier query's output in the same place */
@@ -852,7 +857,7 @@ static ngx_int_t ngx_pq_result(ngx_pq_save_t *s, ngx_pq_data_t *d) {
             }
             PQclear(res);
             if (rc == NGX_AGAIN) break; /* COPY row not fully received yet */
-            s->rc = rc;
+            if (s->rc == NGX_OK) s->rc = rc; /* the first error stands: a later query's success must not turn it into 200 */
         }
         if (!consumed) { if (finished) goto done; return NGX_AGAIN; } /* finish only once the socket is drained: an EOF that came with the last data gets no event of its own */
     }

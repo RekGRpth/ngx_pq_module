@@ -21,7 +21,7 @@ pq_execute
 * Default: --
 * Context: location, if in location, upstream
 
-Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for execute:
+Sets $query_name (nginx variables allowed), optional (several) $argument_value (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for execute (output=binary returns a single value in PostgreSQL binary format; a result with more than one value is an error):
 ```nginx
 location =/postgres {
     pq_execute $query string $argument output=plain; # execute query with name $query and two arguments (first argument is string and second argument is taken from $argument variable) and plain output type
@@ -159,7 +159,7 @@ pq_query
 * Default: --
 * Context: location, if in location, upstream
 
-Sets sql (named only nginx variables allowed as identifier only), optional (several) $argument_value (nginx variables allowed), $argument_oid (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for prepare and execute:
+Sets sql (named only nginx variables allowed as identifier only), optional (several) $argument_value (nginx variables allowed), $argument_oid (nginx variables allowed) and output csv/plain/value/binary (location only, no nginx variables allowed) or $variable (create nginx variable, allowed in location and upstream) for prepare and execute (output=binary returns a single value in PostgreSQL binary format; a result with more than one value is an error):
 ```nginx
 location =/postgres {
     pq_pass postgres; # upstream is postgres
