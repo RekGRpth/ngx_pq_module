@@ -1139,3 +1139,46 @@ another command is already in progress
 --- error_code eval
 [200, 200]
 --- timeout: 10
+
+=== TEST 26:
+--- skip_eval: 12: !-e "/etc/nginx/modules/ngx_http_push_stream_module.so"
+--- main_config
+    load_module /etc/nginx/modules/ngx_http_push_stream_module.so;
+    load_module /etc/nginx/modules/ngx_pq_module.so;
+--- http_config
+    push_stream_shared_memory_size 32m;
+    upstream pg {
+        keepalive 1;
+        pq_option user=postgres;
+        server unix:/run/postgresql:5432;
+    }
+--- config
+    location =/pub {
+        push_stream_publisher admin;
+        push_stream_channels_path $arg_id;
+        push_stream_store_messages on;
+    }
+    location ~ ^/sub/(.*) {
+        push_stream_subscriber polling;
+        push_stream_channels_path $1;
+        push_stream_message_template "~text~;";
+    }
+    location =/ {
+        pq_pass pg;
+        pq_query "listen ch";
+        pq_query "notify ch, 'hello'";
+    }
+    location =/notify {
+        pq_option user=postgres;
+        pq_pass unix:/run/postgresql:5432;
+        pq_query "notify ch, 'idle'";
+    }
+--- request eval
+["DELETE /pub?id=ch", "POST /pub?id=ch\nfirst", "GET /", "GET /notify", "GET /pub?id=ch", "GET /sub/ch"]
+--- more_headers eval
+["", "", "", "", "", "If-Modified-Since: Thu, 01 Jan 1970 00:00:00 GMT\nIf-None-Match: 0"]
+--- error_code_like eval
+["^(?:200|404)\$", "^200\$", "^200\$", "^200\$", "^200\$", "^200\$"]
+--- response_body_like eval
+[".*", '"published_messages": 1,', "^\$", "^\$", '"published_messages": 3,', "^first;hello;idle;\$"]
+--- timeout: 10
