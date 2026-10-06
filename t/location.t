@@ -1075,7 +1075,7 @@ PGRES_TUPLES_OK and SELECT 2
 GET /
 --- error_code: 502
 --- error_log eval
-qr/PGRES_FATAL_ERROR.*, client: 127\.0\.0\.1, server: localhost, request: "GET \/ HTTP\/1\.1"/
+qr/PGRES_FATAL_ERROR.*, client: "?127\.0\.0\.1"?, server: "?localhost"?, request(?:_line)?: "GET \/ HTTP\/1\.1"/
 --- no_error_log
 stale notice
 [alert]

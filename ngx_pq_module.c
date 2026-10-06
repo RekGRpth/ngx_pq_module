@@ -1,5 +1,8 @@
 #include <ngx_http.h>
 #include "ngx_http_upstream.c"
+#ifdef ANGIE_VERSION
+#include "ngx_http_upstream_keepalive_module.c" /* Angie's keepalive caches connections in peer.connect and peer.close, not in peer.get and peer.free: ngx_pq_peer_cached looks into its cache */
+#endif
 
 #undef OPENSSL_API_COMPAT
 
@@ -1157,6 +1160,36 @@ ret:
 }
 #endif
 
+#ifdef ANGIE_VERSION
+static ngx_flag_t ngx_pq_peer_cached(ngx_peer_connection_t *pc, ngx_http_upstream_srv_conf_t *uscf) {
+    ngx_http_upstream_keepalive_srv_conf_t *kcf = ngx_http_conf_upstream_srv_conf(uscf, ngx_http_upstream_keepalive_module);
+    for (ngx_queue_t *q = ngx_queue_head(&kcf->cache); q != ngx_queue_sentinel(&kcf->cache); q = ngx_queue_next(q)) {
+        ngx_http_upstream_keepalive_cache_t *item = ngx_queue_data(q, ngx_http_upstream_keepalive_cache_t, queue);
+        if (!ngx_memn2cmp((u_char *)&item->sockaddr, (u_char *)pc->sockaddr, item->socklen, pc->socklen)) return 1;
+    }
+    return 0;
+}
+#endif
+static ngx_int_t ngx_pq_peer_connect(ngx_peer_connection_t *pc, void *data) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
+    ngx_pq_data_t *d = data;
+    ngx_int_t rc;
+#ifdef ANGIE_VERSION
+    if (!pc->connection && d->peer.connect && ngx_pq_peer_cached(pc, d->request->upstream->upstream)) { /* the keepalive module's connect hands out the cached connection; on a cache miss it would open a plain socket, not a libpq connection */
+        if ((rc = d->peer.connect(pc, d->peer.data)) != NGX_OK) return rc;
+    }
+#endif
+    if (!pc->connection) return ngx_pq_peer_open(pc, data);
+    ngx_connection_t *c = pc->connection;
+    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
+        ngx_pq_save_t *s = d->save = cln->data;
+        if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_DECLINED; }
+        if ((rc = ngx_pq_queries(s, d, ngx_pq_type_location)) == NGX_AGAIN) { ngx_post_event(c->write, &ngx_posted_events); } /* ngx_http_upstream_connect arms connect_timeout once we return, but the connection is already up: let ngx_pq_event_handler drop it */
+        return rc;
+    }
+    ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
+    return NGX_BUSY;
+}
 static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "%s", __func__);
     ngx_pq_data_t *d = data;
@@ -1180,22 +1213,12 @@ static ngx_int_t ngx_pq_peer_get(ngx_peer_connection_t *pc, void *data) {
         case NGX_OK: ngx_log_debug0(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = NGX_OK"); break;
         default: ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "peer.get = %i", rc); return rc;
     }
-    if (!pc->connection) return ngx_pq_peer_open(pc, data);
-    ngx_connection_t *c = pc->connection;
-    for (ngx_pool_cleanup_t *cln = c->pool->cleanup; cln; cln = cln->next) if (cln->handler == ngx_pq_save_cln_handler) {
-        ngx_pq_save_t *s = d->save = cln->data;
-        if (PQstatus(s->conn) != CONNECTION_OK) { ngx_pq_log_error(NGX_LOG_ERR, pc->log, 0, PQerrorMessage(s->conn), "CONNECTION_BAD"); return NGX_DECLINED; }
-        if ((rc = ngx_pq_queries(s, d, ngx_pq_type_location)) == NGX_AGAIN) { ngx_post_event(c->write, &ngx_posted_events); } /* ngx_http_upstream_connect arms connect_timeout once we return, but the connection is already up: let ngx_pq_event_handler drop it */
-        return rc;
-    }
-    ngx_log_error(NGX_LOG_ERR, pc->log, 0, "!s");
-    return NGX_BUSY;
+#ifdef ANGIE_VERSION
+    if (rc == NGX_OK) return NGX_OK; /* Angie connects in peer.connect, right after: ngx_pq_peer_connect */
+#endif
+    return ngx_pq_peer_connect(pc, data);
 }
-static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
-    ngx_pq_data_t *d = data;
-    if (pc->connection) pc->connection->read->ready = 0; /* stale: libpq, not nginx, reads this socket; left set, the keepalive module would peek into it right away and close the connection - freeing s - if anything is pending (a NOTIFY, a terminated backend's FATAL); ngx_pq_read_handler looks at it instead, posted below */
-    d->peer.free(pc, d->peer.data, state);
+static void ngx_pq_peer_release(ngx_peer_connection_t *pc, ngx_pq_data_t *d) {
     ngx_pq_save_t *s = d->save;
     if (!s) return;
     s->keepalive = (pc->connection == NULL);
@@ -1302,6 +1325,24 @@ cont:;
     if (!s->keepalive) d->save = NULL; /* draining after a cancel: closed as soon as the results are in, maybe before the log phase */
     ngx_post_event(c->read, &ngx_posted_events); /* whatever is already in the socket gets no event of its own (edge-triggered) */
 }
+static void ngx_pq_peer_free(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
+    ngx_pq_data_t *d = data;
+    if (pc->connection) pc->connection->read->ready = 0; /* stale: libpq, not nginx, reads this socket; left set, the keepalive module would peek into it right away and close the connection - freeing s - if anything is pending (a NOTIFY, a terminated backend's FATAL); ngx_pq_read_handler looks at it instead, posted in ngx_pq_peer_release */
+    d->peer.free(pc, d->peer.data, state);
+#ifdef ANGIE_VERSION
+    if (d->peer.close) return; /* Angie's keepalive caches the connection in peer.close, right after: ngx_pq_peer_close releases it then */
+#endif
+    ngx_pq_peer_release(pc, d);
+}
+#ifdef ANGIE_VERSION
+static void ngx_pq_peer_close(ngx_peer_connection_t *pc, void *data, ngx_uint_t state) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pc->log, 0, "state = %ui", state);
+    ngx_pq_data_t *d = data;
+    d->peer.close(pc, d->peer.data, state);
+    ngx_pq_peer_release(pc, d);
+}
+#endif
 
 static ngx_int_t ngx_pq_peer_init_data(ngx_http_request_t *r, ngx_http_upstream_srv_conf_t *uscf, ngx_pq_data_t *d) {
     ngx_http_upstream_t *u = r->upstream;
@@ -1311,6 +1352,10 @@ static ngx_int_t ngx_pq_peer_init_data(ngx_http_request_t *r, ngx_http_upstream_
     u->peer.data = d;
     u->peer.free = ngx_pq_peer_free;
     u->peer.get = ngx_pq_peer_get;
+#ifdef ANGIE_VERSION
+    u->peer.connect = ngx_pq_peer_connect;
+    if (d->peer.close) u->peer.close = ngx_pq_peer_close;
+#endif
     ngx_http_set_ctx(r, d, ngx_pq_module);
     return NGX_OK;
 }
